@@ -22,15 +22,15 @@
 | Phase | 作業 | 重要度 |
 |---|---|---|
 | Phase 0 | ブータブルUSB作成・ハード換装・BIOS設定 | ★★ |
-| Phase 1 | VMのサービス停止 + スラッシング保護データのエクスポート | ★★★ |
-| Phase 2 | 物理PCのOS・ネットワーク・要塞化（SSH/Tailscale/Fail2Ban） | ★★ |
+| Phase 1 | 物理PCのOS・ネットワーク・要塞化（SSH/Tailscale/Fail2Ban） | ★★ |
+| Phase 2 | VMのサービス停止 + スラッシング保護データのエクスポート | ★★★ |
 | Phase 3 | Geth/Lighthouse構築 + 鍵移行 + VC起動 | ★★★ |
 | Phase 4 | 鍵を10個に増設（無停止スケールアップ） | ★★ |
 | Phase 5 | MEV-Boost導入 | ★ |
 | Phase 6 | Prometheus + Grafana 監視スタック構築 | ★★ |
 | Phase 7 | sudo不要化の設計と自作スクリプトによる日常運用 | ★★ |
 
-> ⚠️ **Phase 1のスラッシング保護データ移行を省略すると、新旧両環境で二重署名が起き「一発退場（スラッシング）」になります。最優先で正しく行ってください。**
+> ⚠️ **Phase 2のスラッシング保護データ移行を省略すると、新旧両環境で二重署名が起き「一発退場（スラッシング）」になります。最優先で正しく行ってください。**
 
 ---
 
@@ -133,54 +133,7 @@ Samsung 990 PRO 2TBへ換装後、BIOS設定を行います。
 
 ---
 
-## Phase 1　VM側の移行前準備
-
-> ⚠️ **この操作で署名が止まります。物理PCでの起動を速やかに完了させ、長時間オフラインを避けてください。**
-
-### Step 1　VMの全サービスを停止（VC→BN→ELの順）
-
-```bash
-# 必ずVC（署名役）を最初に止める。署名が止まれば二重署名リスクがゼロになる
-sudo systemctl stop lighthouse-vc
-sudo systemctl stop lighthouse
-sudo systemctl stop geth
-
-# 全て inactive になったことを確認してから次へ進む
-sudo systemctl status geth lighthouse lighthouse-vc
-```
-
-### Step 2　スラッシング保護データのエクスポート
-
-```bash
-# 過去の署名履歴を世界標準JSONで書き出す。これが二重署名防止の生命線
-sudo -u ethereum lighthouse account validator slashing-protection export \
-  --network hoodi \
-  --datadir /var/lib/ethereum/lighthouse \
-  /tmp/slashing_protection.json
-
-# 所有者を自分に変更（scpでコピーできるようにする）
-sudo chown $USER:$USER /tmp/slashing_protection.json
-```
-
-### Step 3　鍵データの転送（VM → ホストPC → 物理PC）
-
-```powershell
-# VM → ホストPC（Windows PowerShell）
-scp -P 2222 <user>@127.0.0.1:/tmp/slashing_protection.json .
-scp -P 2222 -r <user>@127.0.0.1:/var/lib/ethereum/lighthouse/validators/* ./validators/
-```
-
-```bash
-# ホストPC → 物理PC（Tailscale IP経由）
-scp ./slashing_protection.json <user>@<dest_tailscale_ip>:/var/lib/lido-csm/slashing_protection/
-scp -r ./validators/* <user>@<dest_tailscale_ip>:/var/lib/lido-csm/validators/
-```
-
-> 💡 **なぜTailscale IP経由か：** 公開ネットワークに鍵を晒さないため、必ずTailscale IP（100.x.x.x）を使います。
-
----
-
-## Phase 2　OS・ネットワーク・要塞化
+## Phase 1　OS・ネットワーク・要塞化
 
 ### Step 4　Ubuntu Server 24.04 クリーンインストール後の初期設定
 
@@ -252,19 +205,31 @@ sudo systemctl restart sshd
 
 ### Step 7　Tailscale VPN のインストール
 
+**Tailscaleとは：**
+各デバイスに `100.x.x.x` の仮想IPを割り当て、インターネット上の第三者からは見えないプライベートな通路を作るVPNです。これを使うことでSSHを完全に外部から隠すことができます。
+
+**なぜSSHをTailscale経由に限定するか：**
+外部IPでSSHを公開すると、世界中からブルートフォース（総当たり）攻撃を受けます。`tailscale0` インターフェース経由のみに制限することで、認証済みデバイスからしか接続できなくなります。
+
 ```bash
 curl -fsSL https://tailscale.com/install.sh | sh
 sudo tailscale up
-# → ブラウザで認証URLを開いてデバイスを承認
+# → ブラウザで認証URLを開いてデバイスを承認する
+# → 認証後、ip addr show tailscale0 で 100.x.x.x のIPが割り当てられれば成功
 ```
 
-> 💡 **SSHアクセスはTailscale経由のみに限定します。** これにより、インターネットからのSSH総当たり攻撃を完全に遮断できます。
+> 💡 **このTailscale設定が完了して初めて、Phase 2のVMからの安全な鍵転送が可能になります。**
 
 ### Step 8　Fail2Ban の設定
+
+**Fail2Banとは：**
+ログを監視して不正ログイン試行を検知し、一定回数失敗したIPを自動的にブロックするツールです。Tailscaleで外部を遮断しつつ、万が一の侵入試行に対する第2の防衛線として機能します。
 
 ```bash
 # fail2banをインストールして設定ファイルを複製する
 sudo apt install -y fail2ban
+# jail.confはパッケージ更新で上書きされる可能性がある
+# jail.localはユーザー設定専用ファイルで更新後も設定が保持される
 sudo cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
 ```
 
@@ -285,7 +250,8 @@ sudo fail2ban-client status sshd
 > 💡 **TailscaleのIPをFail2Banのホワイトリストに追加：**
 > `/etc/fail2ban/jail.local` の `[DEFAULT]` セクションに
 > `ignoreip = 127.0.0.1/8 100.64.0.0/10` を追加します。
-> これで自分のVPNアクセスで誤BANされません。
+> `100.64.0.0/10` はTailscaleのIPレンジです。これを設定することで
+> 自分のTailscaleアクセスで誤BANされることを防ぎます。
 
 ### Step 9　UFW ファイアウォール設定
 
@@ -309,6 +275,60 @@ sudo ufw allow 9000/udp
 sudo ufw --force enable
 sudo ufw status verbose
 ```
+
+> ✅ **これで新PCの「箱」が完成しました。**
+> TailscaleによるVPN経路が確立し、SSH要塞化・Fail2Ban・UFWによる多層防御が整いました。
+> 次のPhase 2でVMから安全に鍵転送が可能になります。
+
+---
+
+## Phase 2　VM側の移行前準備
+
+> ⚠️ **この操作で署名が止まります。物理PCでの起動を速やかに完了させ、長時間オフラインを避けてください。**
+
+### Step 1　VMの全サービスを停止（VC→BN→ELの順）
+
+```bash
+# 必ずVC（署名役）を最初に止める。署名が止まれば二重署名リスクがゼロになる
+sudo systemctl stop lighthouse-vc
+sudo systemctl stop lighthouse
+sudo systemctl stop geth
+
+# 全て inactive になったことを確認してから次へ進む
+sudo systemctl status geth lighthouse lighthouse-vc
+```
+
+### Step 2　スラッシング保護データのエクスポート
+
+```bash
+# 過去の署名履歴を世界標準JSONで書き出す。これが二重署名防止の生命線
+sudo -u ethereum lighthouse account validator slashing-protection export \
+  --network hoodi \
+  --datadir /var/lib/ethereum/lighthouse \
+  /tmp/slashing_protection.json
+
+# 所有者を自分に変更（scpでコピーできるようにする）
+sudo chown $USER:$USER /tmp/slashing_protection.json
+```
+
+### Step 3　鍵データの転送（VM → ホストPC → 物理PC）
+
+> ⚠️ **Phase 1でTailscaleの設定が完了していることを確認してから実施してください。**
+> Tailscale IP（100.x.x.x）が割り当てられていない場合、鍵転送が完了しません。
+
+```powershell
+# VM → ホストPC（Windows PowerShell）
+scp -P 2222 <user>@127.0.0.1:/tmp/slashing_protection.json .
+scp -P 2222 -r <user>@127.0.0.1:/var/lib/ethereum/lighthouse/validators/* ./validators/
+```
+
+```bash
+# ホストPC → 物理PC（Tailscale IP経由）
+scp ./slashing_protection.json <user>@<dest_tailscale_ip>:/var/lib/lido-csm/slashing_protection/
+scp -r ./validators/* <user>@<dest_tailscale_ip>:/var/lib/lido-csm/validators/
+```
+
+> 💡 **なぜTailscale IP経由か：** 公開ネットワークに鍵を晒さないため、必ずTailscale IP（100.x.x.x）を使います。
 
 ---
 
@@ -364,13 +384,17 @@ ExecStart=/usr/bin/geth \
   --datadir /var/lib/ethereum/geth \
   --authrpc.addr 127.0.0.1 \
   --authrpc.port 8551 \
+  --authrpc.vhosts localhost \
   --authrpc.jwtsecret /var/lib/ethereum/jwt/jwt.hex \
   --http \
+  --http.addr 127.0.0.1 \
   --http.api eth,net,engine,admin \
+  --ws \
+  --ws.addr 127.0.0.1 \
+  --ws.port 8546 \
+  --ws.api eth,net,engine,admin \
   --metrics \
-  --metrics.addr 127.0.0.1 \
-  --metrics.port 6060 \
-  --cache 8192
+  --metrics.addr 127.0.0.1
 
 [Install]
 WantedBy=multi-user.target
@@ -383,11 +407,9 @@ WantedBy=multi-user.target
 > - `--hoodi` : Hoodi テストネットに接続します。
 > - `--datadir` : ブロックチェーンデータの保存先を指定します。
 > - `--authrpc.*` : LighthouseとのEngine API通信の設定です（JWT認証）。
-> - `--http` / `--http.api` : JSON-RPC APIを有効にします（同期状態確認などに使用）。
-> - `--metrics` / `--metrics.*` : Prometheusがメトリクスを収集するためのエンドポイントを有効にします。
-> - `--cache 8192` : GethのRAMキャッシュをMB単位で設定します（RAM 32GB環境では8192が最適）。
-
-> 💡 **`--cache 8192` について：** ベアメタル環境（RAM 32GB）ではVMの4096から倍増できます。UTXO セットをRAMに乗せることでSSDへのI/Oを激減させ、ブロック検証速度が大幅に向上します。
+> - `--http` / `--http.addr` / `--http.api` : JSON-RPC APIを有効にします（同期状態確認などに使用）。
+> - `--ws` / `--ws.addr` / `--ws.port 8546` / `--ws.api` : WebSocket APIを有効化します。第3部のSSVノード連携で使用するため、ここで設定しておきます。
+> - `--metrics` / `--metrics.addr` : Prometheusがメトリクスを収集するためのエンドポイントを有効にします。
 
 ```bash
 sudo systemctl daemon-reload && sudo systemctl enable --now geth
@@ -421,18 +443,16 @@ Group=ethereum
 Type=simple
 Restart=always
 RestartSec=5
-ExecStart=/usr/local/bin/lighthouse bn \
+ExecStart=/usr/local/bin/lighthouse beacon_node \
   --network hoodi \
   --datadir /var/lib/ethereum/lighthouse \
   --execution-endpoint http://127.0.0.1:8551 \
   --execution-jwt /var/lib/ethereum/jwt/jwt.hex \
   --checkpoint-sync-url https://checkpoint-sync.hoodi.ethpandaops.io \
+  --builder http://127.0.0.1:18550 \
   --http \
   --http-address 127.0.0.1 \
-  --metrics \
-  --metrics-address 127.0.0.1 \
-  --metrics-port 5054 \
-  --target-peers 80
+  --metrics
 
 [Install]
 WantedBy=multi-user.target
@@ -444,9 +464,9 @@ WantedBy=multi-user.target
 > - `--network hoodi` : Hoodi テストネットに接続します。
 > - `--execution-endpoint` : GethのEngine APIエンドポイントを指定します（JWT認証で通信）。
 > - `--checkpoint-sync-url` : ethpandaops（Ethereum Foundation公式チーム）が提供するチェックポイント同期URLです。初回起動時に数日かかる同期を数分で完了できます。
+> - `--builder http://127.0.0.1:18550` : MEV-Boostとの連携エンドポイントを指定します（Phase 5で起動するMEV-Boostに接続）。
 > - `--http` / `--http-address` : Validator ClientからBNに接続するためのAPIを有効にします。
-> - `--metrics` / `--metrics-address` / `--metrics-port 5054` : Prometheusがメトリクスを収集するエンドポイントです。
-> - `--target-peers 80` : 接続するピア数の目標値です（ベアメタル環境では80まで増やせます）。
+> - `--metrics` : Prometheusがメトリクスを収集するためのエンドポイントを有効にします。
 
 > 📎 **Hoodi チェックポイント同期URL：** [checkpoint-sync.hoodi.ethpandaops.io](https://checkpoint-sync.hoodi.ethpandaops.io)
 
@@ -511,13 +531,15 @@ ExecStart=/usr/local/bin/lighthouse vc \
   --datadir /var/lib/lido-csm \
   --beacon-nodes http://127.0.0.1:5052 \
   --suggested-fee-recipient 0x9b108015fe433F173696Af3Aa0CF7CDb3E104258 \
+  --secrets-dir /var/lib/lido-csm/secrets \
+  --builder-proposals \
   --metrics \
   --metrics-address 127.0.0.1 \
   --metrics-port 5064 \
   --http \
+  --unencrypted-http-transport \
   --http-address 127.0.0.1 \
-  --http-port 5062 \
-  --builder-proposals
+  --http-port 5062
 
 [Install]
 WantedBy=multi-user.target
@@ -529,8 +551,10 @@ WantedBy=multi-user.target
 > - `--beacon-nodes` : Beacon Nodeのエンドポイントを指定します（VCはBN経由でELと通信するためこれだけでOK）。
 > - `--suggested-fee-recipient` : ブロック提案時の手数料の送り先です。必ずLido公式のEL Rewards Vaultアドレスを指定します（自分のウォレットを指定するとMEV stealing判定でペナルティ）。
 > - `--metrics` / `--metrics-address` / `--metrics-port 5064` : Prometheusメトリクス収集エンドポイントです。
-> - `--http` / `--http-address` / `--http-port 5062` : node_check.sh がバリデータ状態をAPIで取得するために使用します。
-> - `--builder-proposals` : MEV-Boost経由のブロック提案を有効にします（Phase 5で使用）。
+> - `--secrets-dir /var/lib/lido-csm/secrets` : バリデータキーストアのパスワードファイルが格納されているディレクトリを指定します。
+> - `--builder-proposals` : MEV-Boost経由のブロック提案を有効にします。
+> - `--metrics` / `--metrics-address` / `--metrics-port 5064` : Prometheusメトリクス収集エンドポイントです。
+> - `--http` / `--unencrypted-http-transport` / `--http-address` / `--http-port 5062` : node_check.sh がバリデータ状態をAPIで取得するために使用します（ローカルのみのためHTTPで可）。
 
 ```bash
 sudo systemctl daemon-reload && sudo systemctl enable --now lighthouse-vc
@@ -679,7 +703,7 @@ ExecStart=/usr/local/bin/mev-boost \
   -hoodi \
   -addr 127.0.0.1:18550 \
   -relay-check \
-  -relays <relay_url_1>,<relay_url_2>
+  -relays https://0xafa4c6985aa049fb79dd37010438cfebeb0f2bd42b115b89dd678dab0670c1de38da0c4e9138c9290a398ecd9a0b3110@boost-relay-hoodi.flashbots.net,https://0x821f2a65afb70e7f2e820a925a9b4c80a159620582c1766b1b09729fec178b11ea22abb3a51f07b288be815a1a2ff516@bloxroute.hoodi.blxrbdn.com
 
 [Install]
 WantedBy=multi-user.target
@@ -699,15 +723,10 @@ sudo systemctl daemon-reload && sudo systemctl enable --now mev-boost
 
 ### Step 20　Lighthouse BN/VC にMEV-Boost連携を追加
 
-> 💡 **viエディタの基本操作：** `i` で入力モード開始 → `--builder http://127.0.0.1:18550` の行を ExecStart の最後に追記 → `Esc` → `:wq` で保存終了。
+Step 12のlighthouse.serviceには既に `--builder http://127.0.0.1:18550` が含まれています。MEV-Boostを起動すればBNが自動的に接続します。
 
 ```bash
-# lighthouse.service の ExecStart に追記
-sudo vi /etc/systemd/system/lighthouse.service
-# --builder http://127.0.0.1:18550  ← 追加
-
-# VC側は Step 15 で --builder-proposals 設定済み
-
+# MEV-Boostを起動してからBN/VCを再起動する（接続を有効化）
 sudo systemctl daemon-reload
 sudo systemctl restart lighthouse lighthouse-vc
 ```
@@ -946,7 +965,10 @@ echo -e "${CYAN}   Lido CSM Operator #XXX | SSV Operator #XXX       ${NC}"
 echo -e "${CYAN}====================================================${NC}"
 TZ="Asia/Tokyo" date "+%Y-%m-%d %H:%M:%S (JST)"
 
-# [1] サービスの稼働状況（systemctl is-active は sudo 不要）
+# [1] サービスの稼働状況
+# geth/lighthouse/mev-boost/lighthouse-vcの4つが全てactiveか確認する
+# どれかがinactiveの場合はjournalctl -u <サービス名> -n 50 で原因を調査する
+# ※ systemctl is-active は sudo 不要なのでスクリプトから直接呼べる
 echo -e "\n${YELLOW}[1] System Services Status${NC}"
 for svc in geth lighthouse mev-boost lighthouse-vc; do
     STATUS=$(systemctl is-active $svc)
@@ -957,13 +979,17 @@ for svc in geth lighthouse mev-boost lighthouse-vc; do
     fi
 done
 
-# [2] リソース
+# [2] リソース使用状況
+# ディスク使用率が85%を超えたらgeth snapshot pruneを検討する
+# メモリ不足（free -h でAvailableが少ない）の場合は--cache値を下げる
 echo -e "\n${YELLOW}[2] Resource Usage${NC}"
 df -h / | awk 'NR==1 || NR==2'
 echo ""
 free -h
 
 # [3] 同期ステータス
+# is_syncing: false かつ sync_distance: 0 が正常稼働状態
+# is_syncing: true の場合はまだ同期中（新規構築直後は正常）
 echo -e "\n${YELLOW}[3] Sync Status${NC}"
 SYNC_INFO=$(curl -m 5 -s http://127.0.0.1:5052/eth/v1/node/syncing 2>/dev/null)
 if [ -n "$SYNC_INFO" ]; then
@@ -977,6 +1003,8 @@ else
 fi
 
 # [4] ピア数
+# Lighthouse: 50以上、Geth: 10以上あれば正常
+# 0のまま続く場合はUFWのポート開放（9000/30303）を確認する
 echo -e "\n${YELLOW}[4] Peer Count${NC}"
 LH_PEERS=$(curl -m 5 -s http://127.0.0.1:5052/eth/v1/node/peer_count | jq -r '.data.connected' 2>/dev/null)
 GETH_HEX=$(curl -m 5 -s -H "Content-Type: application/json" -X POST \
@@ -990,12 +1018,16 @@ fi
 echo " - Lighthouse Peers: ${LH_PEERS:-Error}"
 echo " - Geth Peers:       ${GETH_PEERS:-Error}"
 
-# [5] 直近の署名活動
+# [5] 直近の署名活動（アテステーション）
+# "Successfully published attestations"が定期的に出ていれば報酬発生中
+# 出ていない場合はbeaconcha.inでバリデータのステータスを確認する
 echo -e "\n${YELLOW}[5] Recent Attestations (Last 3)${NC}"
 journalctl -u lighthouse-vc --no-pager -n 100 | \
   grep "Successfully published attestations" | tail -n 3
 
-# [6] MEV-Boost
+# [6] MEV-Boostステータス
+# Builder API: Online であればMEV-Boostがリレーと正常通信中
+# Offline の場合はjournalctl -u mev-boost -n 30 でログを確認する
 echo -e "\n${YELLOW}[6] MEV-Boost Status${NC}"
 MEV_STATUS=$(curl -m 5 -s http://127.0.0.1:18550/eth/v1/builder/status)
 if [ "$MEV_STATUS" = "{}" ] || [ -n "$MEV_STATUS" ]; then
@@ -1004,7 +1036,8 @@ else
     echo -e " - Builder API: ${RED}Offline${NC}"
 fi
 
-# [7] Validator Status & Balance
+# [7] バリデータステータスと残高
+# active_ongoing: 正常稼働中、pending: デポジット処理待ち
 # ACL（setfacl）で権限付与済みのため、sudo なしでディレクトリ名を読み取れる
 echo -e "\n${YELLOW}[7] Validator Status & Balance${NC}"
 PUBKEYS=$(ls -1 /var/lib/lido-csm/validators/ 2>/dev/null | grep "^0x" | paste -sd "," -)
@@ -1033,7 +1066,9 @@ else
     fi
 fi
 
-# [8] 時刻同期
+# [8] 時刻同期ステータス
+# Last Offset が 0.01秒以内であれば正常
+# PoSは12秒ごとのスロットで動くため時刻同期は必須
 echo -e "\n${YELLOW}[8] Time Synchronization Status${NC}"
 CHRONY_TRACKING=$(chronyc tracking)
 OFFSET=$(echo "$CHRONY_TRACKING" | grep "Last offset" | awk '{printf "%.6f", $4}')
@@ -1048,14 +1083,18 @@ else
 fi
 echo -e " - Reference ID: $REF_ID"
 
-# [9] セキュリティ
-# fail2ban-client は visudo で NOPASSWD 設定済みのため sudo が通る
+# [9] セキュリティ・リモートアクセス状況
+# fail2ban-client は visudo で NOPASSWD 設定済みのため sudo なしで実行される
+# Banned数が増えている場合は不正アクセス試行が発生している証拠（Fail2Banが防いでいる）
 echo -e "\n${YELLOW}[9] Security & Remote Access${NC}"
 F2B=$(sudo fail2ban-client status sshd | grep "Currently banned" | awk '{print $4}')
 echo -e " - fail2ban  : ${GREEN}active${NC} (Banned: ${F2B:-0})"
 echo -e " - Tailscale : ${GREEN}online${NC}"
 
 # [10] ネットワーク通信量
+# 月間1〜2.5TBが正常範囲（10バリデータ / ピア数80〜200前後）
+# 通信量が多い場合は --target-peers を下げることで調整できる
+# vnstatが未インストールの場合はsudo apt install vnstatで導入する
 echo -e "\n${YELLOW}[10] Network Usage (rx:Down / tx:Up / total)${NC}"
 if command -v vnstat >/dev/null 2>&1; then
     IFACE="enp1s0"
@@ -1074,6 +1113,8 @@ else
 fi
 
 # [11] OSアップデート・再起動要否
+# Restart Required: YES の場合は ./node_safe_stop.sh 実行後に sudo reboot する
+# Updates Available の場合は定期的に sudo apt-get upgrade -y を実施する
 echo -e "\n${YELLOW}[11] OS Update & Restart Status${NC}"
 if [ -f /var/run/reboot-required ]; then
     echo -e " - Restart Required : ${RED}YES${NC}"
@@ -1089,7 +1130,9 @@ else
     echo "$UPDATE_INFO" | sed 's/^/    /'
 fi
 
-# [12] SSV Node（第3部で追加）
+# [12] SSV Node（第3部で有効化）
+# 第3部のSSVノード構築完了後にここにコンテナ状態・P2Pピア数・スロットが表示される
+# 現時点では「Not installed」と表示されるが正常
 echo -e "\n${YELLOW}[12] SSV Node (DVT) Status${NC}"
 if command -v docker >/dev/null 2>&1 && \
    docker ps -a --format '{{.Names}}' | grep -q "^ssv-node$"; then
