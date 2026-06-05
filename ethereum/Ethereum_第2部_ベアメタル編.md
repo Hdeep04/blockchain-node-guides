@@ -1475,6 +1475,10 @@ sudo systemctl daemon-reload
 
 Ethereumノードは継続的に通信します。vnstatで日次・月次の通信量を把握することが重要です。
 
+参考実測値（Hoodi Testnet / バリデータ10個 / ベアメタル環境）：
+- 昨日の通信量：↓ 66.83 GiB | ↑ 73.24 GiB | 合計 140.07 GiB
+- 本日推定：134 GiB → 月換算 約 4TB
+
 ```bash
 sudo apt install -y vnstat
 vnstat -d   # 日次表示（1日後から利用可能）
