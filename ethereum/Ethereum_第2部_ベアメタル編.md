@@ -34,6 +34,68 @@
 
 ---
 
+## 第2部を読み進める前に
+
+### sudo とは何か
+
+`sudo` = **Super User DO** の略。管理者（root）権限でコマンドを実行するための指示です。
+
+| コマンド | 実行者 | できること |
+|---|---|---|
+| `ls /var/lib/` | 一般ユーザー | 参照のみ |
+| `sudo ls /var/lib/` | root として実行 | 参照・変更・削除すべて可能 |
+
+例え：「ビルの入館証」のようなものです。通常は1階のみ入れますが、`sudo` を付けると全フロアのドアが開きます。だからこそ **必要な場面だけに絞って使う** ことが重要です。
+
+`/var/lib/` 配下のファイルやSystemdサービスの操作はroot権限が必要なため、本書のコマンドに `sudo` が頻繁に登場します。
+
+### vi エディタの基本操作
+
+本書では設定ファイルの編集に `vi` を使います。以下の操作を覚えておけば困りません。
+
+| キー操作 | 意味 |
+|---|---|
+| `i` | 入力モード開始（文字を打てる状態にする） |
+| `Esc` | 入力モード終了 |
+| `:wq` | 保存して終了（write + quit） |
+| `:q!` | 保存せず強制終了（変更を破棄） |
+| 矢印キー | カーソル移動 |
+
+viに不慣れな場合は `nano` エディタも使用できます：
+- 起動: `sudo nano /path/to/file`
+- 保存: `Ctrl + O` → Enter
+- 終了: `Ctrl + X`
+
+### 第2部がなぜ本番なのか
+
+第1部（VM環境）と第2部（ベアメタル）の根本的な違いを図で示します。
+
+```
+【第1部：VM環境】
+
+Windows OS（ホスト）
+├─ CPU / RAM / SSD（物理ハードウェア）
+└─ VirtualBox（仮想化レイヤー）← ここにオーバーヘッドが発生
+   └─ Ubuntu VM
+      └─ Geth + Lighthouse
+              ↓
+      SSD アクセスが仮想化レイヤーを経由するため遅い
+      ブロック検証が追いつかず → 署名失敗（BeaconScore 90.31%）
+
+【第2部：ベアメタル環境】
+
+Ubuntu OS（ベアメタル）← OS がハードウェアに直接乗る
+├─ CPU / RAM / SSD（物理ハードウェア）← 直接アクセス
+└─ Geth + Lighthouse
+              ↓
+      SSD へ直接アクセスで高速
+      ブロック検証が安定 → 署名成功率向上（BeaconScore 97.39%）
+```
+
+> 💡 **「ベアメタル」とは：** 仮想化ソフトウェアを挟まず、OS をハードウェアに直接インストールした状態のことです。第2部ではこの構成で運用します。
+
+---
+
 ## Phase 0　ハードウェア準備
 
 ### Step 0-1　ブータブルUSBの作成
@@ -139,6 +201,8 @@ chronyc tracking
 sudo vi /etc/netplan/01-netcfg.yaml
 ```
 
+> 💡 **viエディタの基本操作：** `i` で入力モード開始 → 編集 → `Esc` → `:wq` で保存終了。viが苦手な場合は `sudo nano /etc/netplan/01-netcfg.yaml`（Ctrl+O 保存・Ctrl+X 終了）でも可。
+
 ```yaml
 network:
   version: 2
@@ -150,6 +214,7 @@ network:
 
 ```bash
 # パーミッションを必ず 600 に設定（Netplanのセキュリティ要件）
+# 600 = 所有者（root）だけ読み書き可能。グループ・他ユーザーはアクセス不可
 sudo chmod 600 /etc/netplan/01-netcfg.yaml
 sudo netplan apply
 ```
@@ -158,9 +223,9 @@ sudo netplan apply
 
 ```bash
 # SSH公開鍵認証の設定
-mkdir -p ~/.ssh && chmod 700 ~/.ssh
+mkdir -p ~/.ssh && chmod 700 ~/.ssh   # 700: 自分だけ読み書き実行可能（SSHはこれより広い権限だと接続を拒否する）
 # ~/.ssh/authorized_keys にホストPCの公開鍵（ed25519推奨）を貼り付け
-chmod 600 ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys   # 600: 自分だけ読み書き可能
 
 # rootのパスワードをロック
 sudo passwd -l root
@@ -170,6 +235,8 @@ sudo passwd -l root
 # /etc/ssh/sshd_config を編集
 sudo vi /etc/ssh/sshd_config
 ```
+
+> 💡 **viエディタの基本操作：** `i` で入力モード開始 → 編集 → `Esc` → `:wq` で保存終了。viが苦手な場合は `sudo nano /etc/ssh/sshd_config` でも可。
 
 設定すべき項目：
 
@@ -196,10 +263,21 @@ sudo tailscale up
 ### Step 8　Fail2Ban の設定
 
 ```bash
+# fail2banをインストールして設定ファイルを複製する
 sudo apt install -y fail2ban
 sudo cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
+```
+
+```bash
+# 設定ファイルを編集する
 sudo vi /etc/fail2ban/jail.local
-# → [sshd] セクションの enabled = true を確認
+```
+
+> 💡 **viエディタの基本操作：** `i` で入力モード開始 → 編集 → `Esc` → `:wq` で保存終了。viが苦手な場合は `sudo nano /etc/fail2ban/jail.local` でも可。
+> `[sshd]` セクションを探し `enabled = true` になっていることを確認します。
+
+```bash
+# fail2banを有効化して起動・動作確認する
 sudo systemctl enable --now fail2ban
 sudo fail2ban-client status sshd
 ```
@@ -250,7 +328,9 @@ sudo mkdir -p /var/lib/lido-csm/{validators,slashing_protection,secrets}
 sudo openssl rand -hex 32 | sudo tee /var/lib/ethereum/jwt/jwt.hex > /dev/null
 
 # 権限設定
+# chown: ディレクトリの所有者をethereum専用ユーザーに変更する（-R は再帰的に全サブディレクトリへ適用）
 sudo chown -R ethereum:ethereum /var/lib/ethereum /var/lib/lido-csm
+# chmod 600: 所有者（ethereum）だけが読み書きできる（6=読4+書2）。他ユーザーはアクセス不可
 sudo chmod 600 /var/lib/ethereum/jwt/jwt.hex
 ```
 
@@ -265,6 +345,8 @@ geth version
 ```bash
 sudo vi /etc/systemd/system/geth.service
 ```
+
+> 💡 **viエディタの基本操作：** `i` で入力モード開始 → 編集 → `Esc` → `:wq` で保存終了。viが苦手な場合は `sudo nano /etc/systemd/system/geth.service` でも可。
 
 ```ini
 [Unit]
@@ -294,6 +376,17 @@ ExecStart=/usr/bin/geth \
 WantedBy=multi-user.target
 ```
 
+> 💡 **サービス設定の各項目について：**
+> - `User=ethereum` / `Group=ethereum` : 専用の非特権ユーザーで実行します。rootで動かすよりも、万が一の侵害時の被害を最小限に抑えられます。
+> - `Restart=always` : プロセスが何らかの理由で終了した場合、自動的に再起動します。ノードがクラッシュしてもサービスが自力で復帰します。
+> - `RestartSec=5` : 再起動前に5秒待ちます。即座に再起動するとエラーループに陥るリスクがあるためバッファを設けています。
+> - `--hoodi` : Hoodi テストネットに接続します。
+> - `--datadir` : ブロックチェーンデータの保存先を指定します。
+> - `--authrpc.*` : LighthouseとのEngine API通信の設定です（JWT認証）。
+> - `--http` / `--http.api` : JSON-RPC APIを有効にします（同期状態確認などに使用）。
+> - `--metrics` / `--metrics.*` : Prometheusがメトリクスを収集するためのエンドポイントを有効にします。
+> - `--cache 8192` : GethのRAMキャッシュをMB単位で設定します（RAM 32GB環境では8192が最適）。
+
 > 💡 **`--cache 8192` について：** ベアメタル環境（RAM 32GB）ではVMの4096から倍増できます。UTXO セットをRAMに乗せることでSSDへのI/Oを激減させ、ブロック検証速度が大幅に向上します。
 
 ```bash
@@ -314,6 +407,8 @@ sudo mv lighthouse /usr/local/bin/ && lighthouse --version
 ```bash
 sudo vi /etc/systemd/system/lighthouse.service
 ```
+
+> 💡 **viエディタの基本操作：** `i` で入力モード開始 → 編集 → `Esc` → `:wq` で保存終了。viが苦手な場合は `sudo nano /etc/systemd/system/lighthouse.service` でも可。
 
 ```ini
 [Unit]
@@ -343,6 +438,16 @@ ExecStart=/usr/local/bin/lighthouse bn \
 WantedBy=multi-user.target
 ```
 
+> 💡 **サービス設定の各項目について：**
+> - `User=ethereum` / `Group=ethereum` : 専用の非特権ユーザーで実行します。
+> - `Restart=always` / `RestartSec=5` : クラッシュ時に5秒後自動再起動します。
+> - `--network hoodi` : Hoodi テストネットに接続します。
+> - `--execution-endpoint` : GethのEngine APIエンドポイントを指定します（JWT認証で通信）。
+> - `--checkpoint-sync-url` : ethpandaops（Ethereum Foundation公式チーム）が提供するチェックポイント同期URLです。初回起動時に数日かかる同期を数分で完了できます。
+> - `--http` / `--http-address` : Validator ClientからBNに接続するためのAPIを有効にします。
+> - `--metrics` / `--metrics-address` / `--metrics-port 5054` : Prometheusがメトリクスを収集するエンドポイントです。
+> - `--target-peers 80` : 接続するピア数の目標値です（ベアメタル環境では80まで増やせます）。
+
 > 📎 **Hoodi チェックポイント同期URL：** [checkpoint-sync.hoodi.ethpandaops.io](https://checkpoint-sync.hoodi.ethpandaops.io)
 
 ```bash
@@ -355,8 +460,10 @@ curl -s http://127.0.0.1:5052/eth/v1/node/syncing | jq
 
 ```bash
 # 転送した鍵の所有者をethereumに変更（これをしないとLighthouseが読めない）
+# chown -R: ディレクトリとその中のファイル全ての所有者を再帰的に変更する
 sudo chown -R ethereum:ethereum /var/lib/lido-csm/validators
 sudo chown -R ethereum:ethereum /var/lib/lido-csm/slashing_protection
+# chmod 700: 所有者（ethereum）だけが読み書き実行できる（7=読4+書2+実行1）。他ユーザーはアクセス不可
 sudo chmod -R 700 /var/lib/lido-csm/validators
 sudo chmod -R 700 /var/lib/lido-csm/slashing_protection
 ```
@@ -386,6 +493,8 @@ sudo -u ethereum lighthouse account validator slashing-protection import \
 sudo vi /etc/systemd/system/lighthouse-vc.service
 ```
 
+> 💡 **viエディタの基本操作：** `i` で入力モード開始 → 編集 → `Esc` → `:wq` で保存終了。viが苦手な場合は `sudo nano /etc/systemd/system/lighthouse-vc.service` でも可。
+
 ```ini
 [Unit]
 Description=Lighthouse Validator Client (Hoodi)
@@ -413,6 +522,15 @@ ExecStart=/usr/local/bin/lighthouse vc \
 [Install]
 WantedBy=multi-user.target
 ```
+
+> 💡 **サービス設定の各項目について：**
+> - `User=ethereum` / `Group=ethereum` : 専用の非特権ユーザーで実行します。バリデータ鍵を扱うため特に権限の最小化が重要です。
+> - `Restart=always` / `RestartSec=5` : クラッシュ時に5秒後自動再起動します。
+> - `--beacon-nodes` : Beacon Nodeのエンドポイントを指定します（VCはBN経由でELと通信するためこれだけでOK）。
+> - `--suggested-fee-recipient` : ブロック提案時の手数料の送り先です。必ずLido公式のEL Rewards Vaultアドレスを指定します（自分のウォレットを指定するとMEV stealing判定でペナルティ）。
+> - `--metrics` / `--metrics-address` / `--metrics-port 5064` : Prometheusメトリクス収集エンドポイントです。
+> - `--http` / `--http-address` / `--http-port 5062` : node_check.sh がバリデータ状態をAPIで取得するために使用します。
+> - `--builder-proposals` : MEV-Boost経由のブロック提案を有効にします（Phase 5で使用）。
 
 ```bash
 sudo systemctl daemon-reload && sudo systemctl enable --now lighthouse-vc
@@ -454,6 +572,39 @@ sudo journalctl -u lighthouse-vc -n 20 -o cat
 > ⚠️ **追加鍵のパスワードは既存鍵と同じパスワードにしてください。** これで同じパスワードファイルを再利用でき、VCを長時間停止せずにインポートが可能になります。
 
 ### Step 17　追加鍵のインポート（/tmp経由）
+
+#### なぜ /tmp 経由でインポートするのか
+
+```
+ホームディレクトリの「700の壁」と /tmp 経由の設計思想：
+
+┌─────────────────────────────────────────────────────────────┐
+│                    問題：直接インポートできない理由              │
+│                                                              │
+│  /home/<your_user>/              ← パーミッション 700         │
+│  ├── validator_keys/             ← <your_user> が所有        │
+│  │                                                           │
+│  ethereum ユーザー ──────────────────────────────────────── X │
+│               ↑                                              │
+│  lighthouse account validator import は                      │
+│  ethereum ユーザーとして実行する必要がある                      │
+│  しかし /home/<your_user>/ は他ユーザーが通過できない（700の壁）│
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                    解決策：/tmp を中立地帯として使う             │
+│                                                              │
+│  /tmp/keys_import/               ← パーミッション 777（誰でも）│
+│  ├── <your_user>   ────→ cp ────→ /tmp/keys_import/  ✅     │
+│  └── ethereum ユーザー ──→ read ─→ /tmp/keys_import/  ✅     │
+│                                                              │
+│  /tmp は全ユーザーがアクセスできる「中立地帯」                   │
+│  1. sudo cp で鍵を /tmp にコピー                               │
+│  2. sudo chown で ethereum に所有権を渡す                      │
+│  3. ethereum として lighthouse import を実行                   │
+│  4. sudo rm -rf で /tmp の機密データを即座に削除（必須）         │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ```bash
 # なぜ /tmp 経由か：
@@ -511,6 +662,8 @@ mev-boost --version
 sudo vi /etc/systemd/system/mev-boost.service
 ```
 
+> 💡 **viエディタの基本操作：** `i` で入力モード開始 → 編集 → `Esc` → `:wq` で保存終了。viが苦手な場合は `sudo nano /etc/systemd/system/mev-boost.service` でも可。
+
 ```ini
 [Unit]
 Description=mev-boost (Hoodi)
@@ -532,11 +685,21 @@ ExecStart=/usr/local/bin/mev-boost \
 WantedBy=multi-user.target
 ```
 
+> 💡 **サービス設定の各項目について：**
+> - `User=ethereum` / `Group=ethereum` : 専用の非特権ユーザーで実行します。
+> - `Restart=always` / `RestartSec=5` : クラッシュ時に5秒後自動再起動します。
+> - `-hoodi` : Hoodi テストネット用のリレーと通信します。
+> - `-addr 127.0.0.1:18550` : Lighthouse BNがMEV-Boostに接続するためのローカルアドレス・ポートです。
+> - `-relay-check` : 起動時にリレーの疎通確認を行います。
+> - `-relays` : 使用するMEV-BoostリレーのURLをカンマ区切りで指定します。
+
 ```bash
 sudo systemctl daemon-reload && sudo systemctl enable --now mev-boost
 ```
 
 ### Step 20　Lighthouse BN/VC にMEV-Boost連携を追加
+
+> 💡 **viエディタの基本操作：** `i` で入力モード開始 → `--builder http://127.0.0.1:18550` の行を ExecStart の最後に追記 → `Esc` → `:wq` で保存終了。
 
 ```bash
 # lighthouse.service の ExecStart に追記
@@ -562,6 +725,34 @@ Prometheusが各クライアントからメトリクスを収集し、Grafanaが
 | 収集役 | Prometheus | 9090 | 各クライアントから15秒ごとに数値を収集 |
 | 可視化役 | Grafana | 3000 | ダッシュボードで可視化 |
 | OS監視 | Node Exporter | 9100 | CPU温度・SSD負荷・メモリ等 |
+
+#### データの流れ（全体像）
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    監視スタック データフロー                    │
+│                                                               │
+│  ┌─────────────┐  :6060   ┌──────────────────────────────┐  │
+│  │    Geth     │ ──────→  │                              │  │
+│  └─────────────┘          │                              │  │
+│  ┌─────────────┐  :5054   │      Prometheus              │  │
+│  │ Lighthouse  │ ──────→  │      （15秒ごとに収集）       │  │
+│  │    BN       │          │      port: 9090              │  │
+│  └─────────────┘          │                              │  │
+│  ┌─────────────┐  :5064   │                              │  │
+│  │ Lighthouse  │ ──────→  │                              │  │
+│  │    VC       │          └──────────────┬───────────────┘  │
+│  └─────────────┘                         │                   │
+│  ┌─────────────┐  :9100                  │ データ提供         │
+│  │   Node      │ ──────→ Prometheus      ↓                   │
+│  │  Exporter   │         （OS指標）  ┌──────────┐            │
+│  └─────────────┘                    │ Grafana  │            │
+│                                     │ port:3000│            │
+│  ブラウザ ←── Tailscale VPN ────────│ダッシュボ│            │
+│  （あなたのPC）                      │  ード    │            │
+│                                     └──────────┘            │
+└──────────────────────────────────────────────────────────────┘
+```
 
 ### Step 21　Node Exporter のインストール
 
@@ -731,9 +922,11 @@ sudo visudo -f /etc/sudoers.d/node-ops
 
 ### Step 27　node_check.sh の作成
 
+> 💡 **viエディタの基本操作：** `vi ~/node_check.sh` を実行後、`i` で入力モード開始 → 下記スクリプトを貼り付け → `Esc` → `:wq` で保存終了。
+
 ```bash
 vi ~/node_check.sh   # 下記内容を貼り付け
-chmod +x ~/node_check.sh
+chmod +x ~/node_check.sh   # +x: 実行権限を付与する
 echo "alias node_check='~/node_check.sh'" >> ~/.bashrc && source ~/.bashrc
 ```
 
@@ -922,9 +1115,11 @@ echo -e "\n${CYAN}====================================================${NC}"
 
 ### Step 28　node_safe_stop.sh の作成
 
+> 💡 **viエディタの基本操作：** `vi ~/node_safe_stop.sh` を実行後、`i` で入力モード開始 → 下記スクリプトを貼り付け → `Esc` → `:wq` で保存終了。
+
 ```bash
 vi ~/node_safe_stop.sh   # 下記内容を貼り付け
-chmod +x ~/node_safe_stop.sh
+chmod +x ~/node_safe_stop.sh   # +x: 実行権限を付与する
 ```
 
 ```bash
