@@ -367,10 +367,23 @@ sudo chmod 600 /var/lib/ethereum/jwt/jwt.hex
 
 ### インストール
 
+> 📎 **Geth公式ドキュメント（インストール手順）：** [Installing Geth](https://geth.ethereum.org/docs/getting-started/installing-geth)
+
+Gethは **PPA（Personal Package Archive）** を使ってインストールします。
+PPAとはUbuntu向けの追加ソフトウェア配布元です。
+Ethereumチームが公式に提供しているリポジトリを登録することで、
+`apt` コマンドから常に最新版のGethを入手できます。
+
 ```bash
-# Ethereum公式PPAから導入（常に最新版が提供される）
+# ① PPA（Ethereumの公式リポジトリ）をシステムに登録する
+# これがないと apt が geth を見つけられず install が失敗する
 sudo add-apt-repository -y ppa:ethereum/ethereum
-sudo apt-get update && sudo apt-get install -y geth
+sudo apt-get update
+
+# ② Gethをインストールする
+sudo apt-get install -y geth
+
+# ③ インストール成功の確認（バージョン番号が表示されればOK）
 geth version
 ```
 
