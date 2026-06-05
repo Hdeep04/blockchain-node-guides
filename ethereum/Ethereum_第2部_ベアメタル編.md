@@ -553,7 +553,6 @@ WantedBy=multi-user.target
 > - `--metrics` / `--metrics-address` / `--metrics-port 5064` : Prometheusメトリクス収集エンドポイントです。
 > - `--secrets-dir /var/lib/lido-csm/secrets` : バリデータキーストアのパスワードファイルが格納されているディレクトリを指定します。
 > - `--builder-proposals` : MEV-Boost経由のブロック提案を有効にします。
-> - `--metrics` / `--metrics-address` / `--metrics-port 5064` : Prometheusメトリクス収集エンドポイントです。
 > - `--http` / `--unencrypted-http-transport` / `--http-address` / `--http-port 5062` : node_check.sh がバリデータ状態をAPIで取得するために使用します（ローカルのみのためHTTPで可）。
 
 ```bash
@@ -581,6 +580,20 @@ sudo journalctl -u lighthouse-vc -n 20 -o cat
 ### Step 16　既存ニーモニックから追加鍵を生成
 
 > 📎 **公式リリースページ：** [ethstaker-deposit-cli releases](https://github.com/eth-educators/ethstaker-deposit-cli/releases)
+
+```bash
+# 作業ディレクトリの作成
+mkdir -p ~/csm-artifacts
+cd ~/csm-artifacts
+
+# 公式リリースページから最新版をダウンロード
+# ※ <version> は https://github.com/eth-educators/ethstaker-deposit-cli/releases で確認
+wget https://github.com/eth-educators/ethstaker-deposit-cli/releases/download/<version>/ethstaker_deposit-cli-<version>-linux-amd64.tar.gz
+
+# 解凍してディレクトリ移動
+tar -xvf ethstaker_deposit-cli-*-linux-amd64.tar.gz
+cd ethstaker_deposit-cli-*-linux-amd64
+```
 
 ```bash
 ./deposit existing-mnemonic \
@@ -1630,8 +1643,6 @@ sudo apt install -y vnstat
 vnstat -d   # 日次表示（1日後から利用可能）
 vnstat -m   # 月次表示
 ```
-
-> 参考実測値（Hoodi Testnet / バリデータ10個 / ベアメタル環境）：昨日 140GiB / 本日推定 134GiB → 月換算 約 4TB
 
 **目安（10バリデータ / ピア数80〜200前後）：**
 
