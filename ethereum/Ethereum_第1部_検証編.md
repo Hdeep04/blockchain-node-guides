@@ -34,7 +34,7 @@
 
 ### Ethereum の2層構造（最重要概念）
 
-Ethereum は2つのソフトウェアを連携させて動かします。これは Cardano の単一ノード構成と大きく異なる点です。
+Ethereum は2つのソフトウェアを連携させて動かします。この2層構造を理解することが、構築作業の全ての基本になります。
 
 | レイヤー | 略称 | ソフト | 役割 |
 |---|---|---|---|
@@ -79,6 +79,42 @@ VirtualBox の「設定 → ネットワーク → 高度 → ポートフォワ
 | SSH | TCP | 2222 | 22 |
 | Geth P2P | TCP/UDP | 30303 | 30303 |
 | Lighthouse P2P | TCP/UDP | 9000 | 9000 |
+
+### SSH接続と公開鍵認証の設定
+
+VirtualBoxのポートフォワーディング設定後、ホストPCから
+SSH接続できるようにします。
+
+#### 公開鍵の生成（ホストPC側）
+```bash
+# ed25519方式で鍵ペアを生成（RSAより安全・高速）
+ssh-keygen -t ed25519 -C "your_comment"
+# → ~/.ssh/id_ed25519     （秘密鍵：絶対に外に出さない）
+# → ~/.ssh/id_ed25519.pub （公開鍵：サーバーに登録する）
+
+# 公開鍵の内容を表示（コピーしておく）
+cat ~/.ssh/id_ed25519.pub
+```
+
+#### 公開鍵をVMに登録
+```bash
+# VM側で実行
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+vi ~/.ssh/authorized_keys
+# → 上記でコピーした公開鍵を貼り付けて保存
+chmod 600 ~/.ssh/authorized_keys
+```
+
+> 💡 **パーミッションの意味：**
+> - `700` = 自分だけ読み書き実行可能
+> - `600` = 自分だけ読み書き可能
+> SSHは権限が広すぎると接続を拒否するため、この設定が必須です。
+
+#### ホストPCからSSH接続
+```bash
+# ポート2222経由でVMに接続
+ssh -p 2222 <your_user>@127.0.0.1
+```
 
 ### OS初期セットアップ
 
@@ -174,6 +210,24 @@ sudo journalctl -u geth -f -o cat
 | `Engine API enabled` | JWT準備完了（Lighthouseが接続可能）✅ |
 | `Snap sync in progress` | スナップ同期中（正常） |
 
+### Geth同期完了の確認
+
+Lighthouseを起動する前に、Gethの同期が完了するまで待ちます。
+
+```bash
+# 同期状態を確認（繰り返し実行して監視）
+curl -s http://127.0.0.1:8545 \
+  -X POST \
+  -H "Content-Type: application/json" \
+  --data '{"jsonrpc":"2.0","method":"eth_syncing","params":[],"id":1}' | jq
+
+# false と表示されれば同期完了
+# true の場合はまだ同期中（しばらく待つ）
+```
+
+> ⚠️ **Gethの同期が完了（false）してからLighthouseを起動してください。**
+> 同期中にLighthouseを起動すると連携エラーが発生する場合があります。
+
 ---
 
 ## Step 3　Lighthouse（合意クライアント）の構築
@@ -253,15 +307,24 @@ cd ethstaker_deposit-cli-*-linux-amd64
 ### 新規ニーモニックで鍵を生成
 
 ```bash
-# --chain hoodi        : Hoodi専用のfork_versionで生成（重要）
-# --eth1_withdrawal_address : Lido指定のWithdrawal Vaultアドレスを必ず指定
 ./deposit new-mnemonic \
   --num_validators 1 \
   --chain hoodi \
-  --eth1_withdrawal_address <Lido_Withdrawal_Vault_Address>
+  --eth1_withdrawal_address 0x4473dCDDbf77679A643BdB654dbd86D67F8d32f2
 ```
 
-> 📎 **Withdrawal Vault アドレスの確認：** [Lido Deployed Contracts - Hoodi](https://docs.lido.fi/deployed-contracts/hoodi)
+> ⚠️ **Withdrawal Vaultアドレスについて**
+>
+> | ネットワーク | Withdrawal Vault アドレス（proxy）|
+> |---|---|
+> | Hoodi Testnet | `0x4473dCDDbf77679A643BdB654dbd86D67F8d32f2` |
+> | Mainnet（本番） | `0xB9D7934878B5FB9610B3fE8A5e441e8fad7E293f` |
+>
+> 📎 公式確認先: https://docs.lido.fi/deployed-contracts/hoodi
+>
+> 💡 公式ページには `proxy` と `impl` の2種類が表示されますが、
+> 指定するのは必ず **`proxy`** のアドレスです。
+> `impl`（実装アドレス）は内部処理用のため使用しません。
 
 対話フローへの回答：
 
@@ -362,7 +425,32 @@ sudo journalctl -u lighthouse-vc -f -o cat
 | 4. Bond支払い | 必要なBond（テストETH）をデポジット |
 | 5. 確認 | Operator ID が発行されれば登録完了 |
 
-> 📎 **テストETH（Bond用）のFaucet：** [Hoodi Faucet](https://hoodi.faucet.dev/)
+#### deposit_dataの内容確認方法
+```bash
+# 生成されたdeposit_dataの内容を確認
+cat validator_keys/deposit_data-*.json | jq '.[] | {
+  network_name,
+  withdrawal_credentials,
+  pubkey
+}'
+```
+
+> ✅ **確認ポイント：**
+> - `network_name` が `hoodi` であること
+> - `withdrawal_credentials` が `0x01` で始まること
+>   （`0x00` 始まりは個人アドレス指定ミスのサイン）
+> - `pubkey` が表示されること
+
+> 💡 **テストETH（Bond用）の入手方法**
+>
+> 以下のFaucetからHoodiテストETHを入手できます：
+>
+> 📎 https://hoodi-faucet.pk910.de/#/
+>
+> PoWマイニング方式のため、ブラウザを開いたまま
+> 数分〜数時間待つことでテストETHが貯まります。
+>
+> 参考資料: https://note.com/buythedipams/n/nad4bf66b02b1
 
 ---
 
@@ -409,6 +497,46 @@ VM環境でバリデータは稼働しましたが、運用を続けるうちに
 | VCで `--execution-endpoint` エラー | VCはこのオプションを受け付けない | `--beacon-nodes http://127.0.0.1:5052` に変更 |
 | ピア数が0のまま | NVMeコントローラー未設定 / ポート不足 | NVMe確認・ポートフォワーディング再設定 |
 | 同期が遅すぎる | VMのI/O不足 | ピア数を絞る → 根本的にはベアメタル移行 |
+
+---
+
+## beaconcha.in でバリデータを監視する
+
+beaconcha.in はEthereumバリデータの状態をリアルタイムで
+確認できる公式ブロックエクスプローラーです。
+
+### アクセス方法
+📎 Hoodi Testnet: https://hoodi.beaconcha.in/
+
+バリデータの公開鍵で検索するか、
+Lido CSMウィジェットから「Monitoring」リンクで直接アクセスできます。
+
+### ダッシュボードの読み方
+
+| 項目 | 意味 | 正常値 |
+|---|---|---|
+| **Validators Live** | アクティブなバリデータ数 | 登録数と一致 |
+| **BeaconScore** | バリデータ総合スコア | 95%以上 |
+| **Attestations** | 署名成功数 / 失敗数 | 失敗0が理想 |
+| **Att. Efficiency** | アテステーション効率 | 95%以上 |
+| **Slashings** | スラッシング発生数 | 必ず0 |
+| **APR** | 年利回り | ネットワーク平均前後 |
+| **Sync Efficiency** | 同期効率 | 100% |
+
+### スロットマップの見方
+
+ダッシュボード上部のカラーマスは各スロットの署名状況です：
+
+| 色 | 意味 |
+|---|---|
+| 🟩 緑（塗りつぶし） | 署名成功 ✅ |
+| 🟩 緑（枠のみ） | 同期委員会参加 |
+| 🟥 赤枠 | その瞬間だけ遅延（軽微・問題なし） |
+| ⬜ グレー | 未来のスロット（まだ未確定） |
+
+> 💡 **ほぼ全部緑であれば正常稼働中です。**
+> 数個の赤枠はネットワークの一時的な遅延で発生するため、
+> 連続して赤が続かない限り問題ありません。
 
 ---
 
