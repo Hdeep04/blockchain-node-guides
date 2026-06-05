@@ -1084,8 +1084,11 @@ fi
 echo -e " - Reference ID: $REF_ID"
 
 # [9] セキュリティ・リモートアクセス状況
-# fail2ban-client は visudo で NOPASSWD 設定済みのため sudo なしで実行される
-# Banned数が増えている場合は不正アクセス試行が発生している証拠（Fail2Banが防いでいる）
+# fail2ban: Banned数が増えている場合は不正アクセス試行が発生している証拠
+#           Fail2Banが自動でブロック済みのため通常は対処不要
+#           fail2ban-client は visudo で NOPASSWD 設定済みのため sudo なしで実行される
+# Tailscale: onlineであればVPN経由のリモートアクセスが正常に維持されている
+#            offlineになった場合は sudo tailscale up で再接続する
 echo -e "\n${YELLOW}[9] Security & Remote Access${NC}"
 F2B=$(sudo fail2ban-client status sshd | grep "Currently banned" | awk '{print $4}')
 echo -e " - fail2ban  : ${GREEN}active${NC} (Banned: ${F2B:-0})"
