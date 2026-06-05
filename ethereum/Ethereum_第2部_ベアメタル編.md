@@ -417,7 +417,7 @@ WantedBy=multi-user.target
 > - `--datadir` : ブロックチェーンデータの保存先を指定します。
 > - `--authrpc.*` : LighthouseとのEngine API通信の設定です（JWT認証）。
 > - `--http` / `--http.addr` / `--http.api` : JSON-RPC APIを有効にします（同期状態確認などに使用）。
-> - `--ws` / `--ws.addr` / `--ws.port 8546` / `--ws.api` : WebSocket APIを有効化します。第3部のSSVノード連携で使用するため、ここで設定しておきます。
+> - `--ws` / `--ws.addr` / `--ws.port 8546` / `--ws.api` : WebSocket APIを有効化します。JSON-RPCのHTTPに加え、WebSocketによるリアルタイム通信を可能にします。
 > - `--metrics` / `--metrics.addr` : Prometheusがメトリクスを収集するためのエンドポイントを有効にします。
 
 ```bash
@@ -1200,29 +1200,6 @@ else
     echo "$UPDATE_INFO" | sed 's/^/    /'
 fi
 
-# [12] SSV Node（第3部で有効化）
-# 第3部のSSVノード構築完了後にここにコンテナ状態・P2Pピア数・スロットが表示される
-# 現時点では「Not installed」と表示されるが正常
-echo -e "\n${YELLOW}[12] SSV Node (DVT) Status${NC}"
-if command -v docker >/dev/null 2>&1 && \
-   docker ps -a --format '{{.Names}}' | grep -q "^ssv-node$"; then
-    SSV_STATUS=$(docker inspect -f '{{.State.Status}}' ssv-node 2>/dev/null)
-    if [ "$SSV_STATUS" == "running" ]; then
-        echo -e " - Container : ${GREEN}active (running)${NC}"
-        SSV_PEERS=$(curl -m 3 -s http://127.0.0.1:15000/metrics \
-          | grep '^ssv_p2p_peers_connected' | awk '{print $2}')
-        echo -e " - P2P Peers : ${CYAN}${SSV_PEERS:-Error}${NC}"
-        SSV_SLOT=$(docker logs ssv-node --tail 100 2>&1 \
-          | grep "DutyScheduler" | grep "received head event" | tail -n 1 \
-          | awk -F'"slot": ' '{print $2}' | awk -F',' '{print $1}')
-        echo -e " - Sync Slot : ${GREEN}${SSV_SLOT:-Waiting...}${NC}"
-    else
-        echo -e " - Container : ${RED}${SSV_STATUS}${NC}"
-    fi
-else
-    echo -e " - Container : ${YELLOW}Not installed${NC}"
-fi
-
 echo -e "\n${CYAN}====================================================${NC}"
 ```
 
@@ -1380,17 +1357,6 @@ sudo systemctl reboot
 > 再起動することでメモリの解放・スワップのクリアも同時に行われるため、
 > 手動startより再起動の方が推奨されます。
 
-#### [12] SSV Node (DVT) Status
-
-```
- - Container : active (running)
- - P2P Peers : 3
- - Sync Slot : 3203663
-```
-
-第3部で構築するSSVノードの稼働状態です。
-**第3部完了前は `Not installed` と表示されますが正常です。**
-
 ---
 
 ### Step 28　node_safe_stop.sh の作成
@@ -1485,10 +1451,7 @@ tar -czpf "$BACKUP_FILE" \
     --exclude='/var/lib/lido-csm/validators/*/*.json' \
     --exclude='/var/lib/lido-csm/secrets' \
     --exclude='/var/lib/lido-csm/keystore_password.txt' \
-    --exclude='/opt/ssv/data/encrypted_private_key.json' \
-    --exclude='/opt/ssv/data/password' \
     /var/lib/lido-csm/ \
-    /opt/ssv/ \
     /etc/systemd/system/geth.service \
     /etc/systemd/system/lighthouse.service \
     /etc/systemd/system/lighthouse-vc.service \
@@ -1503,10 +1466,6 @@ find "$BACKUP_DIR" -name "node_backup_*.tar.gz" -mtime +30 -delete
 echo "Backup completed: $BACKUP_FILE"
 echo "Backup size: $(du -sh $BACKUP_FILE | cut -f1)"
 ```
-
-> ⚠️ **`/opt/ssv/` は第3部のSSVノード構築後に有効になります。**
-> 第3部完了前はこのパスが存在しないためwarningが出ますが、
-> `2>/dev/null` で無視されるため問題ありません。
 
 ### Step 30　cron による自動バックアップの設定
 
@@ -1684,7 +1643,6 @@ vnstat -m   # 月次表示
 | ✅ 含める | chrony設定 `/etc/chrony/chrony.conf` | 時刻同期設定の再現 |
 | ❌ 除外 | バリデータ鍵本体 `validators/*/*.json` | バックアップ経路での漏洩リスク |
 | ❌ 除外 | keystoreパスワード `keystore_password.txt` / `secrets/` | 同上 |
-| ❌ 除外 | SSV鍵・パスワード `encrypted_private_key.json` / `password` | 同上 |
 
 > 💡 **なぜ鍵本体をバックアップしないのか：**
 > バリデータ鍵は最初に生成した際のニーモニック（24単語）から復元できます。
@@ -1696,4 +1654,6 @@ vnstat -m   # 月次表示
 
 ---
 
-> ✅ **第2部ゴール達成：** VMの鍵を物理PCへ安全移行し、10鍵に増設、Prometheus + Grafana自作ダッシュボード + 自作スクリプトで「長期安定運用」の基盤が完成しました。次は第3部で、このサーバーの余力を使ってSSVノードも兼業します。
+> ✅ **第2部ゴール達成：** VMの鍵を物理PCへ安全移行し、10鍵に増設、Prometheus + Grafana自作ダッシュボード + 自作スクリプトで「長期安定運用」の基盤が完成しました。
+>
+> さらにステップアップしたい方は、同じサーバーの余力を活かしてSSVノードを兼業する **第3部・分散化SSV編** へどうぞ。
