@@ -17,6 +17,21 @@
 
 ---
 
+## 第3部で追加・変更する内容
+
+| 種別 | 対象 | 備考 |
+|---|---|---|
+| 追加 | Docker Engine + Compose | SSVノードの実行環境 |
+| 追加 | SSVノード（`/opt/ssv/`） | DVTオペレーターとして参加 |
+| 追加 | UFWポート開放（12001/UDP・13001/TCP） | SSV P2P通信 |
+| 変更 | `node_check.sh` に `[12]` を追加 | SSVノードの監視 |
+| 確認 | `node_backup.sh` の `/opt/ssv/` 除外設定 | 第2部で記載済み |
+
+> 💡 **第3部は第2部のサーバーに「追加工事」をするイメージです。**
+> 既存のGeth・Lighthouse・バリデータ稼働を止めずに進められます（Phase 5除く）。
+
+---
+
 ## 「二毛作」という発想 — なぜSSVを兼業するのか
 
 ### 本来の構成と今回の構成の違い
@@ -117,7 +132,13 @@ docker --version && docker compose version
 # sudo なしで docker を実行できるようにする
 sudo usermod -aG docker $USER
 newgrp docker
+```
 
+> 💡 **`newgrp docker` を実行すると新しいシェルセッションが開始されます。**
+> コマンドが通らなくなったように見えても、そのまま続行してください。
+> ターミナルを一度閉じて開き直すか、サーバーにSSHで再接続しても同じ効果があります。
+
+```bash
 # 動作確認
 docker run hello-world
 ```
@@ -236,33 +257,30 @@ curl -s http://127.0.0.1:15000/metrics | grep ssv_p2p_peers_connected
 
 ---
 
-## Phase 5　Geth に WebSocket を追加
+## Phase 5　Geth の WebSocket 設定を確認する
 
-SSVノードはELにWebSocket（ws）で接続します。第2部のGethはHTTPのみ公開していたため追加が必要です。
-
-> ⚠️ **この作業中はバリデータ署名が一時停止します。短時間で完了させてください。**
+SSVノードはELにWebSocket（ws）で接続します。
+第2部のgeth.serviceには既に `--ws` オプションが含まれているため、
+設定が正しく反映されているかを確認します。
 
 ```bash
-sudo vi /etc/systemd/system/geth.service
-```
-
-`ExecStart` に以下を追記します：
-
-```ini
-  --ws \
-  --ws.api eth,net,engine \
-  --ws.addr 127.0.0.1 \
-  --ws.port 8546 \
+# 現在のgeth.serviceにWSオプションが含まれているか確認
+grep -A2 "\-\-ws" /etc/systemd/system/geth.service
+# 以下が表示されれば設定済み：
+#   --ws
+#   --ws.addr 127.0.0.1
+#   --ws.port 8546
 ```
 
 ```bash
-sudo systemctl daemon-reload && sudo systemctl restart geth
-
-# WSが有効になったか確認
+# WSエンドポイントへの疎通確認
 curl -s -X POST -H "Content-Type: application/json" \
   --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":1}' \
   http://127.0.0.1:8545
+# {"jsonrpc":"2.0","id":1,"result":"560048"} のようなレスポンスが返れば正常
 ```
+
+> ✅ レスポンスが返れば Phase 5 完了です。次の Phase 6 へ進んでください。
 
 ---
 
@@ -368,6 +386,18 @@ docker compose logs -f --tail 30
 | 3. 公開鍵を貼付 | Phase 2 で取り出した `pubkey` を入力 |
 | 4. 手数料設定 | オペレーター手数料を設定（テストネットは低めでOK） |
 | 5. TX承認 | 承認すると Operator ID が発行される |
+
+```bash
+# 登録後：自分のオペレーターIDをWebAppで確認する
+# https://app.ssv.network/ → 「My Account」→「Operators」タブ
+# → 発行されたOperator IDをCLAUDE.mdの「SSV Operator #<ID>」に記録しておく
+```
+
+> 💡 **Operator IDはnode_check.shの出力に表示されます。**
+> 第2部のnode_check.shを開き、冒頭の以下の行に自分のIDを記入してください：
+> ```
+> echo -e "   Lido CSM Operator #<CSM_ID> | SSV Operator #<SSV_ID>       "
+> ```
 
 ### SSV WebApp での Fee Recipient 設定（必須）
 
@@ -476,3 +506,13 @@ docker compose logs -f --tail 50
 - **第3部：** 余剰リソースを活かしたSSV(DVT)の兼業（二毛作）＋ネットワーク名競合の自力解決とハイブリッド構成の確立
 
 > ✅ **ソロステーキング（Lido CSM）とDVT（SSV）の両方を1台のサーバーで「二毛作」として実機運用し、さらに SSV v2.4.2 の未報告バグ（Hoodi ネットワーク名の非対応）を自力で発見・特定・回避しました。この構成と知見は、日本語・英語を問わず公開情報として存在しない一次記録です。**
+
+---
+
+### 実績記録
+
+| 日付 | 実績 |
+|---|---|
+| 2026年6月5日 | **Lido CSM ICS（Identified Community Stakers）合格** |
+
+> 💡 **ICSとは：** Lido CSMの中でも審査・選考を通過した信頼できるオペレーターとして公式認定される制度です。27年間の会社員キャリアからゼロベースで挑戦し、構築・運用・トラブル解決の全過程をこの3部作に記録しました。
