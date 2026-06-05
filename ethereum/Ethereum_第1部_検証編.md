@@ -474,8 +474,13 @@ curl -s http://127.0.0.1:8545 \
 | `--data '...'` | リクエストボディ（JSON-RPC のコマンド本文） |
 | `\| jq` | レスポンスJSON を整形して見やすく表示します（`jq` = JSON整形ツール） |
 
-> ⚠️ **Gethの同期が完了（false）してからLighthouseを起動してください。**
-> 同期中にLighthouseを起動すると連携エラーが発生する場合があります。
+> 💡 **同期の順序について（重要）**
+> The Merge以降のEthereumでは、GethとLighthouseはセットで起動します。
+> Geth単体では同期が始まりません。
+> Step3でLighthouse(BN)を起動し、Checkpoint Syncが完了して初めて
+> Engine API経由でGethに「ここに向かって同期しろ」という指示が出され、
+> Gethの同期がスタートします。
+> GethとLighthouseは続けて起動してください。
 
 ---
 
@@ -694,11 +699,18 @@ ExecStart=/usr/local/bin/lighthouse vc \
   --datadir /var/lib/lido-csm \
   --beacon-nodes http://127.0.0.1:5052 \
   --suggested-fee-recipient 0x9b108015fe433F173696Af3Aa0CF7CDb3E104258 \
-  --metrics
+  --metrics \
+  --http \
+  --http-address 127.0.0.1 \
+  --http-port 5062
 
 [Install]
 WantedBy=multi-user.target
 ```
+
+> 💡 **`--http-port 5062` は第2部の監視スクリプト（node_check.sh）で
+> バリデータの状態をAPIから取得するために使用します。
+> ここで有効にしておくことで第2部へスムーズに移行できます。**
 
 > 💡 **サービス設定の各項目について：**
 > - `User=ethereum` / `Group=ethereum` : 専用の非特権ユーザーで実行します。バリデータ鍵を扱うため、特に権限の最小化が重要です。
