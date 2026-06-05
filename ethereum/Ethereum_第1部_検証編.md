@@ -448,9 +448,9 @@ sudo journalctl -u geth -f -o cat
 | `Engine API enabled` | JWT準備完了（Lighthouseが接続可能）✅ |
 | `Snap sync in progress` | スナップ同期中（正常） |
 
-### Geth同期完了の確認
+### Geth起動後の動作確認
 
-Lighthouseを起動する前に、Gethの同期が完了するまで待ちます。
+Gethを起動したら、サービスが正常に立ち上がっているか確認します。
 
 ```bash
 # 同期状態を確認（繰り返し実行して監視）
@@ -474,13 +474,14 @@ curl -s http://127.0.0.1:8545 \
 | `--data '...'` | リクエストボディ（JSON-RPC のコマンド本文） |
 | `\| jq` | レスポンスJSON を整形して見やすく表示します（`jq` = JSON整形ツール） |
 
-> 💡 **同期の順序について（重要）**
-> The Merge以降のEthereumでは、GethとLighthouseはセットで起動します。
-> Geth単体では同期が始まりません。
-> Step3でLighthouse(BN)を起動し、Checkpoint Syncが完了して初めて
-> Engine API経由でGethに「ここに向かって同期しろ」という指示が出され、
-> Gethの同期がスタートします。
-> GethとLighthouseは続けて起動してください。
+> 💡 **Geth起動直後の正常な状態について**
+> この時点ではまだLighthouse（Consensus Client）が
+> いないため、ブロックの同期は始まりません。
+> ログにエラーが出ずサービスが落ちなければOKです。
+>
+> 次のStep3でLighthouseを起動することで初めて、
+> Engine API経由でGethに同期指示が出され、
+> ブロックの本格的な取り込みがスタートします。
 
 ---
 
