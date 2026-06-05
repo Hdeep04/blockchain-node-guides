@@ -1368,6 +1368,107 @@ fi
 
 ---
 
+### Step 29　node_backup.sh の作成
+
+> 💡 **viエディタの操作：** `vi ~/node_backup.sh` を実行後、`i` で入力モード開始 → 下記スクリプトを貼り付け → `Esc` → `:wq` で保存終了。
+
+```bash
+vi ~/node_backup.sh
+chmod +x ~/node_backup.sh
+```
+
+スクリプトの内容：
+
+```bash
+#!/bin/bash
+
+# バックアップ先ディレクトリ（存在しない場合は自動作成）
+BACKUP_DIR="/home/<your_user>/backups"
+mkdir -p "$BACKUP_DIR"
+
+# バックアップファイル名（日付・時刻付き）
+BACKUP_FILE="$BACKUP_DIR/node_backup_$(date +%Y%m%d_%H%M%S).tar.gz"
+
+# バックアップ実行
+# -c : 新規アーカイブ作成（create）
+# -z : gzip圧縮（zip）
+# -p : パーミッション情報を保持（preserve）
+# -f : ファイル名を指定（file）
+# --exclude : 鍵本体とパスワードを除外（バックアップ経路での漏洩リスク排除）
+tar -czpf "$BACKUP_FILE" \
+    --exclude='/var/lib/lido-csm/validators/*/*.json' \
+    --exclude='/var/lib/lido-csm/secrets' \
+    --exclude='/var/lib/lido-csm/keystore_password.txt' \
+    --exclude='/opt/ssv/data/encrypted_private_key.json' \
+    --exclude='/opt/ssv/data/password' \
+    /var/lib/lido-csm/ \
+    /opt/ssv/ \
+    /etc/systemd/system/geth.service \
+    /etc/systemd/system/lighthouse.service \
+    /etc/systemd/system/lighthouse-vc.service \
+    /etc/systemd/system/mev-boost.service \
+    /home/<your_user>/node_check.sh \
+    /home/<your_user>/node_safe_stop.sh \
+    /etc/chrony/chrony.conf 2>/dev/null
+
+# 30日以上前の古いバックアップを自動削除（ディスク節約）
+find "$BACKUP_DIR" -name "node_backup_*.tar.gz" -mtime +30 -delete
+
+echo "Backup completed: $BACKUP_FILE"
+echo "Backup size: $(du -sh $BACKUP_FILE | cut -f1)"
+```
+
+> ⚠️ **`/opt/ssv/` は第3部のSSVノード構築後に有効になります。**
+> 第3部完了前はこのパスが存在しないためwarningが出ますが、
+> `2>/dev/null` で無視されるため問題ありません。
+
+### Step 30　cron による自動バックアップの設定
+
+```bash
+# cron = 定期的にコマンドを自動実行するLinuxのスケジューラー
+crontab -e
+```
+
+> 💡 **viエディタの操作：** ファイルが開いたら `i` で入力モード → 下記1行を末尾に追記 → `Esc` → `:wq` で保存終了。
+
+追記する内容：
+
+```
+# 毎日午前3時にバックアップを自動実行
+0 3 * * * /home/<your_user>/node_backup.sh >> /home/<your_user>/backups/backup.log 2>&1
+```
+
+> 💡 **cron書式の読み方：**
+>
+> | 分 | 時 | 日 | 月 | 曜日 | 意味 |
+> |---|---|---|---|---|---|
+> | 0 | 3 | * | * | * | 毎日午前3時に実行 |
+>
+> `>> backup.log 2>&1` : 実行結果をログファイルに追記する
+
+```bash
+# 設定確認
+crontab -l
+```
+
+### バックアップの確認とリストア手順
+
+```bash
+# バックアップファイルの一覧確認
+ls -lh ~/backups/
+
+# バックアップの中身を確認（展開せずに内容を表示）
+tar -tzvf ~/backups/node_backup_<日付>.tar.gz
+
+# リストア例：Systemdファイルだけを復元する場合
+sudo tar -xzvf ~/backups/node_backup_<日付>.tar.gz \
+    -C / \
+    etc/systemd/system/geth.service
+sudo systemctl daemon-reload
+```
+
+---
+
 ## 運用の心得とまとめ
 
 ### ネットワーク通信量の管理
@@ -1401,15 +1502,27 @@ vnstat -m   # 月次表示
 
 > 💡 GethのデータはSSD容量の大半を占めます（週10〜15GBペースで増加）。Lighthouseは自動で古いデータを整理するため、主に監視すべきはGethです。2TB SSDなら数ヶ月〜1年は余裕があります。
 
-### バックアップすべき「命のデータ」
+### バックアップ設計の考え方
 
-| 対象 | パス | 理由 |
+バックアップには「含めるべきもの」と「絶対に含めてはいけないもの」があります。
+
+| 種別 | 対象 | 理由 |
 |---|---|---|
-| バリデータ鍵 | `/var/lib/lido-csm/validators/` | 失うと運用不能 |
-| スラッシング保護DB | `/var/lib/lido-csm/slashing_protection/` | 二重署名防止の生命線 |
-| Systemd設定 | `/etc/systemd/system/*.service` | 復旧の高速化 |
+| ✅ 含める | スラッシング保護DB `/var/lib/lido-csm/slashing_protection/` | 二重署名防止の生命線 |
+| ✅ 含める | Systemd設定 `/etc/systemd/system/*.service` | 復旧の高速化 |
+| ✅ 含める | 自作スクリプト `node_check.sh` / `node_safe_stop.sh` | 運用環境の再現 |
+| ✅ 含める | chrony設定 `/etc/chrony/chrony.conf` | 時刻同期設定の再現 |
+| ❌ 除外 | バリデータ鍵本体 `validators/*/*.json` | バックアップ経路での漏洩リスク |
+| ❌ 除外 | keystoreパスワード `keystore_password.txt` / `secrets/` | 同上 |
+| ❌ 除外 | SSV鍵・パスワード `encrypted_private_key.json` / `password` | 同上 |
 
-> 💡 GethやLighthouseの数百GBのブロックチェーンデータはバックアップ不要です。再同期すれば済みます。バックアップするのは少量の「鍵と設定」だけです。
+> 💡 **なぜ鍵本体をバックアップしないのか：**
+> バリデータ鍵は最初に生成した際のニーモニック（24単語）から復元できます。
+> バックアップファイルに鍵を含めると、そのファイルが漏洩した瞬間にスラッシングリスクが生まれます。
+> 鍵はニーモニックを紙に書いてオフラインで保管することが唯一の正しい方法です。
+
+> 💡 **GethやLighthouseの数百GBのブロックチェーンデータはバックアップ不要です。**
+> 再同期すれば済みます。バックアップするのは少量の「設定とDB」だけです。
 
 ---
 
