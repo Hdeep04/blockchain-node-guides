@@ -1515,6 +1515,55 @@ crontab -e
 crontab -l
 ```
 
+### Step 31　バックアップファイルのホストPCへの自動転送
+
+物理PCのバックアップをサーバー内だけに置くのは危険です。
+SSD故障時にバックアップごと失うリスクがあります。
+Windowsのタスクスケジューラーで週1回、自動的にホストPCへ転送します。
+
+#### ホストPC（Windows）側の設定
+
+任意の場所に以下の内容で `node_backup_transfer.bat` を作成してください。
+（例：`C:\Users\<your_user>\scripts\node_backup_transfer.bat`）
+
+```bat
+@echo off
+REM Ethereumノードバックアップの自動転送スクリプト
+REM タスクスケジューラーで週1回実行する
+SET DEST=C:\Users\<your_user>\node_backups
+SET NODE_IP=<your_tailscale_ip>
+SET NODE_USER=<your_user>
+
+REM バックアップ先フォルダを作成（存在しない場合）
+if not exist "%DEST%" mkdir "%DEST%"
+
+REM 最新のバックアップファイルをホストPCに転送
+scp %NODE_USER%@%NODE_IP%:~/backups/node_backup_*.tar.gz "%DEST%"
+echo Transfer completed: %DATE% %TIME%
+```
+
+> 💡 **Tailscale IP（100.x.x.x）を使う理由：**
+> 自宅内でもTailscale経由で転送することで、
+> 将来的に外出先からでも同じスクリプトが動作します。
+
+#### タスクスケジューラーへの登録手順
+
+1. Windowsの検索で「タスクスケジューラー」を開く
+2. 右ペインの「基本タスクの作成」をクリック
+3. 以下の設定で登録する
+
+| 項目 | 設定値 |
+|---|---|
+| 名前 | `Ethereum Node Backup Transfer` |
+| トリガー | 毎週 日曜日 午前4時（cronバックアップの1時間後） |
+| 操作 | プログラムの開始 |
+| プログラム | `C:\Users\<your_user>\scripts\node_backup_transfer.bat` |
+
+> 💡 **なぜcronの1時間後か：**
+> cronが午前3時にバックアップを作成し、
+> タスクスケジューラーが午前4時に転送することで
+> 「作成完了後に転送」という確実な順序を保てます。
+
 ### バックアップの確認とリストア手順
 
 ```bash
