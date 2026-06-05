@@ -665,12 +665,17 @@ cat validator_keys/deposit_data-*.json | jq '.[] | {
 
 ---
 
-## Step 6　動作確認と「移行の決断」
+## Step 6　動作確認
 
-### 全サービスの確認
+### 全サービスの稼働確認
 
 ```bash
 sudo systemctl status geth lighthouse lighthouse-vc
+```
+
+### 署名ログの確認
+
+```bash
 sudo journalctl -u lighthouse-vc -n 20 -o cat | grep attestation
 ```
 
@@ -679,6 +684,29 @@ sudo journalctl -u lighthouse-vc -n 20 -o cat | grep attestation
 | `Successfully published attestations` | 署名成功・報酬発生 ✅ |
 | `All validators inactive` | Lidoのデポジット処理待ち（数時間〜） |
 | `is_optimistic: true` | まだ完全同期していない（待機） |
+
+### beaconcha.in で確認
+
+📎 https://hoodi.beaconcha.in/
+
+バリデータの公開鍵で検索し、
+緑のマスが並び始めれば正常稼働中です。
+
+> ✅ **ここまで来たら第1部の構築は完了です。**
+> 引き続きトラブルシューティングを確認してから
+> 第2部・ベアメタル編に進みましょう。
+
+---
+
+## トラブルシューティング事例
+
+| 症状 | 原因 | 対処 |
+|---|---|---|
+| `deposit_data` の `network_name` が `holesky` | `--chain holesky` を選択してしまった | 削除して `--chain hoodi` で再生成 |
+| `withdrawal_credentials` が `0x00` 始まり | `--eth1_withdrawal_address` を未指定 | Lido Vault アドレスを指定して再生成 |
+| VCで `--execution-endpoint` エラー | VCはこのオプションを受け付けない | `--beacon-nodes http://127.0.0.1:5052` に変更 |
+| ピア数が0のまま | NVMeコントローラー未設定 / ポート不足 | NVMe確認・ポートフォワーディング再設定 |
+| 同期が遅すぎる | VMのI/O不足 | ピア数を絞る → 根本的にはベアメタル移行 |
 
 ---
 
@@ -695,60 +723,13 @@ VM環境でバリデータは稼働しましたが、運用を続けるうちに
 
 > 💡 **応急処置として `--maxpeers 15` / `--target-peers 30` でピアを絞り、リソースを検証に集中させることで急場はしのげました。しかし根本解決は専用の物理マシン（ベアメタル）への移行でした。**
 
-> ✅ **第1部の最大の学び：VMは学習と検証には最適だが、I/Oがシビアな本番バリデータ運用には専用ハードウェアが望ましい。この気づきこそが第1部の成果です。**
-
 ---
 
-## トラブルシューティング事例
-
-| 症状 | 原因 | 対処 |
-|---|---|---|
-| `deposit_data` の `network_name` が `holesky` | `--chain holesky` を選択してしまった | 削除して `--chain hoodi` で再生成 |
-| `withdrawal_credentials` が `0x00` 始まり | `--eth1_withdrawal_address` を未指定 | Lido Vault アドレスを指定して再生成 |
-| VCで `--execution-endpoint` エラー | VCはこのオプションを受け付けない | `--beacon-nodes http://127.0.0.1:5052` に変更 |
-| ピア数が0のまま | NVMeコントローラー未設定 / ポート不足 | NVMe確認・ポートフォワーディング再設定 |
-| 同期が遅すぎる | VMのI/O不足 | ピア数を絞る → 根本的にはベアメタル移行 |
-
----
-
-## beaconcha.in でバリデータを監視する
-
-beaconcha.in はEthereumバリデータの状態をリアルタイムで
-確認できる公式ブロックエクスプローラーです。
-
-### アクセス方法
-📎 Hoodi Testnet: https://hoodi.beaconcha.in/
-
-バリデータの公開鍵で検索するか、
-Lido CSMウィジェットから「Monitoring」リンクで直接アクセスできます。
-
-### ダッシュボードの読み方
-
-| 項目 | 意味 | 正常値 |
-|---|---|---|
-| **Validators Live** | アクティブなバリデータ数 | 登録数と一致 |
-| **BeaconScore** | バリデータ総合スコア | 95%以上 |
-| **Attestations** | 署名成功数 / 失敗数 | 失敗0が理想 |
-| **Att. Efficiency** | アテステーション効率 | 95%以上 |
-| **Slashings** | スラッシング発生数 | 必ず0 |
-| **APR** | 年利回り | ネットワーク平均前後 |
-| **Sync Efficiency** | 同期効率 | 100% |
-
-### スロットマップの見方
-
-ダッシュボード上部のカラーマスは各スロットの署名状況です：
-
-| 色 | 意味 |
-|---|---|
-| 🟩 緑（塗りつぶし） | 署名成功 ✅ |
-| 🟩 緑（枠のみ） | 同期委員会参加 |
-| 🟥 赤枠 | その瞬間だけ遅延（軽微・問題なし） |
-| ⬜ グレー | 未来のスロット（まだ未確定） |
-
-> 💡 **ほぼ全部緑であれば正常稼働中です。**
-> 数個の赤枠はネットワークの一時的な遅延で発生するため、
-> 連続して赤が続かない限り問題ありません。
-
----
-
-> 次は **第2部・ベアメタル編** です。ここで作った鍵を専用物理PCへ安全に引っ越し、鍵を10個に増設し、Prometheus + Grafana で長期安定運用へと育てます。
+> ✅ **第1部の最大の学び：**
+> VMは学習と検証には最適ですが、
+> I/Oがシビアな本番バリデータ運用には専用ハードウェアが望ましい。
+> この気づきこそが第1部の成果です。
+>
+> 次は **第2部・ベアメタル編** で、
+> ここで作った鍵を専用物理PCへ安全に引っ越し、
+> 鍵を10個に増設し、長期安定運用の基盤を作ります。
