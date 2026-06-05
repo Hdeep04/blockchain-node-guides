@@ -1163,20 +1163,147 @@ echo -e "\n${CYAN}====================================================${NC}"
 
 > 参考実測値（Hoodi Testnet / バリデータ10個 / ベアメタル環境 / 2026年6月時点）
 
-| 項目 | 出力例 | 読み方・判断基準 |
-|---|---|---|
-| [1] Service Status | 全サービス `active` | 正常。`inactive` があれば `journalctl -u <サービス名> -n 50` で調査 |
-| [2] Disk Usage | `189G/1.8T (11%)` | 11%使用で余裕十分。85%超でpruning検討 |
-| [3] Sync Status | `is_syncing: false / sync_distance: 0` | 完全同期済み・正常稼働 |
-| [4] Peer Count | `Lighthouse 185 / Geth 50` | 十分な接続数。0のままならUFWのポート開放を確認 |
-| [5] Attestation | `Successfully published attestations` | 約6.4分ごとに出ていれば報酬発生中 |
-| [6] Builder API | `Builder API: Online` | MEV-Boostがリレーと正常通信中 |
-| [7] Validator Status | 全10鍵 `active_ongoing / 32.00xx ETH` | 全バリデータ正常稼働・残高増加中 |
-| [8] Time Sync | `Last Offset -0.000006s` | 完璧な時刻同期（0.01秒以内が合格ライン） |
-| [9] Fail2Ban | `fail2ban active (Banned: 0)` | セキュリティ正常・不正アクセスなし |
-| [10] Network Traffic | `昨日 140GiB / 今日推定 134GiB` | 正常範囲（月換算約4TBに注意） |
-| [11] Updates | `Updates Available` | `node_safe_stop.sh` 実行後に `sudo apt-get upgrade -y` を実施 |
-| [12] SSV Node | `SSV: active / P2P Peers: 3` | 第3部で構築したSSVノードが正常稼働中 |
+実際にコマンドを実行した際の出力と、各項目の読み方を解説します。
+
+#### [1] System Services Status
+
+```
+ - geth: active
+ - lighthouse: active
+ - mev-boost: active
+ - lighthouse-vc: active
+```
+
+4つ全てが `active` であれば正常です。
+`inactive` が表示された場合は以下のコマンドで原因を調査してください。
+
+```
+journalctl -u <サービス名> -n 50
+```
+
+#### [2] Resource Usage
+
+```
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme0n1p2  1.8T  189G  1.6T  11% /
+
+               total   used   free  available
+Mem:            29Gi   10Gi  753Mi       18Gi
+Swap:          8.0Gi  1.3Gi  6.7Gi
+```
+
+- `Use% 11%` → 余裕十分。**85%を超えたら `geth snapshot prune` を検討する**
+- `available 18Gi` → 問題なし。**2GB以下になったら `--cache` 値を下げる**
+
+#### [3] Sync Status
+
+```
+ - is_syncing:    false
+ - sync_distance: 0
+```
+
+`false` / `0` が正常稼働状態です。
+新規構築直後は `true` から始まり、同期が進むにつれて `0` に近づきます。
+
+#### [4] Peer Count
+
+```
+ - Lighthouse Peers: 185
+ - Geth Peers:       50
+```
+
+- Lighthouse: **50以上**、Geth: **10以上** あれば正常です
+- `0` のまま続く場合は UFW のポート開放（9000 / 30303）を確認してください
+
+#### [5] Recent Attestations
+
+```
+INFO Successfully published attestations count: 1, validator_indices: [XXXXXX], slot: XXXXXXX
+```
+
+`Successfully published attestations` が約6.4分ごとに出ていれば報酬発生中です。
+出ていない場合は [beaconcha.in](https://hoodi.beaconcha.in/) でバリデータのステータスを確認してください。
+
+#### [6] MEV-Boost Status
+
+```
+ - Builder API: Online
+```
+
+`Online` であればMEV-Boostがリレーと正常通信中です。
+`Offline` の場合は `journalctl -u mev-boost -n 30` でログを確認してください。
+
+#### [7] Validator Status & Balance
+
+```
+PUBKEY (SHORT)  | STATUS           | BALANCE
+------------------------------------------------------
+0xb4f66315...   | active_ongoing   | 32.0008 ETH
+0x98310086...   | active_ongoing   | 32.0007 ETH
+（以下10鍵分）
+```
+
+- `active_ongoing` → 正常稼働中
+- `pending` → デポジット処理待ち（登録直後は正常）
+- 残高が `32.000x ETH` と増加していれば報酬が積み上がっている証拠です
+
+#### [8] Time Synchronization Status
+
+```
+ - Status      : Synchronized
+ - Last Offset : -0.000006s (Ideal: < 0.01s)
+ - Reference ID: 67016A45 (ntp-a2.nict.go.jp)
+```
+
+`Last Offset` が **±0.01秒以内** であれば正常です。
+EthereumのPoSは12秒ごとのスロットで厳格に動くため、時刻同期は署名成功率に直結します。
+
+#### [9] Security & Remote Access
+
+```
+ - fail2ban  : active (Banned: 0)
+ - Tailscale : online
+```
+
+- `fail2ban Banned: 0` → 不正アクセスなし。数字が増えていてもFail2Banが自動ブロック済みのため通常は対処不要
+- `Tailscale: online` → VPN経由のSSHアクセスが正常に維持されている。`offline` になった場合は `sudo tailscale up` で再接続する
+
+#### [10] Network Usage
+
+```
+ - Yesterday : ↓ 66.83 GiB | ↑ 73.24 GiB | Total: 140.07 GiB
+ - Today     : ↓ 31.42 GiB | ↑ 30.00 GiB | Total: 61.42 GiB (Est: 134.01 GiB)
+```
+
+1日あたり100〜140 GiBが正常範囲です（月換算 約3〜4TB）。
+通信量を減らしたい場合は lighthouse.service の `--target-peers` を50程度に下げてください（報酬への影響なし）。
+
+#### [11] OS Update & Restart Status
+
+```
+ - Restart Required : NO
+ - Pending Updates  : Updates Available!
+```
+
+- `Restart Required: YES` → `./node_safe_stop.sh` 実行後に `sudo reboot`
+- `Updates Available` → 定期的に以下を実施する
+
+```
+./node_safe_stop.sh
+sudo apt-get update && sudo apt-get upgrade -y
+sudo systemctl start geth lighthouse mev-boost lighthouse-vc
+```
+
+#### [12] SSV Node (DVT) Status
+
+```
+ - Container : active (running)
+ - P2P Peers : 3
+ - Sync Slot : 3203663
+```
+
+第3部で構築するSSVノードの稼働状態です。
+**第3部完了前は `Not installed` と表示されますが正常です。**
 
 ---
 
