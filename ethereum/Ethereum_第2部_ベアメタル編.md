@@ -311,6 +311,15 @@ sudo -u ethereum lighthouse account validator slashing-protection export \
 sudo chown $USER:$USER /tmp/slashing_protection.json
 ```
 
+> 💡 **`--datadir` のパスについて：**
+> スラッシング保護データはLighthouse Beacon Node（`/var/lib/ethereum/lighthouse`）に保存されます。
+> バリデータ鍵（`/var/lib/lido-csm`）とは保存場所が異なります。
+> - `/var/lib/ethereum/lighthouse` → BNのデータ（スラッシング保護DB・同期データ）
+> - `/var/lib/lido-csm` → バリデータ鍵・VCのデータ
+>
+> 第1部でLido CSM用にインポートした際の `--datadir /var/lib/lido-csm` と
+> 混同しやすいポイントです。エクスポートは必ず `/var/lib/ethereum/lighthouse` で行ってください。
+
 ### Step 3　鍵データの転送（VM → ホストPC → 物理PC）
 
 > ⚠️ **Phase 1でTailscaleの設定が完了していることを確認してから実施してください。**
