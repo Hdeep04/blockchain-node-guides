@@ -167,3 +167,119 @@ Step 6（動作確認）のbeaconcha.inセクションには
 - ファイルパス（/var/lib/等）の意味
 - curl コマンドの各オプション
 - jq コマンドの役割
+
+## よく抜けるコマンド・チェックリスト
+
+### Geth構築で必ず必要なコマンド（省略禁止）
+以下の順番で必ず記載すること：
+
+1. PPAの追加（これがないとapt install gethが失敗する）
+   sudo add-apt-repository -y ppa:ethereum/ethereum
+   sudo apt-get update
+
+2. Gethのインストール
+   sudo apt-get install -y geth
+
+3. バージョン確認（インストール成功の確認）
+   geth version
+
+### ethstaker-deposit-cliで必ず必要なコマンド（省略禁止）
+以下の順番で必ず記載すること：
+
+1. 作業ディレクトリの作成（これがないとcdが失敗する）
+   mkdir -p ~/csm-artifacts
+   cd ~/csm-artifacts
+
+2. wgetでダウンロード（tarだけ書いてはいけない）
+   wget https://github.com/eth-educators/ethstaker-deposit-cli/releases/download/<version>/ethstaker_deposit-cli-*-linux-amd64.tar.gz
+
+3. 解凍してディレクトリ移動
+   tar -xvf ethstaker_deposit-cli-*-linux-amd64.tar.gz
+   cd ethstaker_deposit-cli-*-linux-amd64
+
+### /tmp経由インポートで必ず必要なコマンド（省略禁止）
+以下の全ステップを省略せず記載すること：
+
+1. 一時ディレクトリの作成
+   sudo mkdir -p /tmp/keys_import
+
+2. ファイルのコピー
+   sudo cp -r ./validator_keys /tmp/keys_import/
+
+3. 所有者変更（これがないとlighthouseが読めない）
+   sudo chown -R ethereum:ethereum /tmp/keys_import
+
+4. インポート実行
+   sudo -u ethereum lighthouse account validator import \
+     --network hoodi \
+     --datadir /var/lib/lido-csm \
+     --directory /tmp/keys_import \
+     --reuse-password
+
+5. 一時ファイルの削除（機密データのクリーンアップ・必須）
+   sudo rm -rf /tmp/keys_import
+
+## viエディタの基本操作（初心者向け必須解説）
+
+viコマンドが登場するたびに必ず以下の解説を添えること：
+
+viエディタの基本操作：
+- i     : 入力モードを開始する（文字が打てるようになる）
+- Esc   : 入力モードを終了する
+- :wq   : 保存して終了（write + quit）
+- :q!   : 保存せずに強制終了（変更を破棄する場合）
+- 矢印キー : カーソル移動
+
+viに不慣れな場合はnanoエディタも使用可能：
+- sudo nano /path/to/file
+- Ctrl+O で保存、Ctrl+X で終了
+
+## sudoコマンドの解説ルール
+
+sudoが登場するたびに以下の説明を添えること：
+- sudo = Super User DO の略。管理者権限でコマンドを実行する
+- なぜ必要か：システムファイルの変更・サービスの操作はroot権限が必要なため
+- /var/lib/ 配下のファイル操作には必ずsudoが必要
+
+## 実測値の注釈ルール
+
+実測値を記載する際は必ず以下の形式で文脈を明記すること：
+- 参考実測値（Hoodi Testnet / バリデータ1個 / VM環境）
+- 参考実測値（Hoodi Testnet / バリデータ10個 / ベアメタル環境）
+
+第1部（VM・1バリデータ）と第2部（ベアメタル・10バリデータ）の
+実測値を混在させないこと。
+
+## 変更禁止事項（実録データ）
+
+以下は実体験の記録のため、内容を変更・削除しないこと：
+
+### 第1部の変更禁止事項
+- VMの限界（ピア数479・デススパイラル）の実録
+- Windows Updateによる強制再起動リスクの記述
+- UPnP拒否の記述
+- 応急処置（--maxpeers 15 / --target-peers 30）の記述
+
+### 第2部の変更禁止事項
+- 鍵生成失敗履歴（index 0,1を破棄、index 2から成功）
+- /tmp経由インポートの設計思想（ホームディレクトリの700の壁）
+- ACL（setfacl）によるsudo不要化の工夫
+- visudoによるNOPASSWD設定の詳細
+- beaconcha.inの実測値（97.39% / 2,250回署名成功 / APR 1.8%）
+- Grafanaの実測値（CPU温度44.9°C / SSD書き込み2〜5 Mb/s）
+
+### 第3部の変更禁止事項
+- SSV v2.4.2のネットワーク名競合パニックの実録
+- ハイブリッド構成確立の経緯（完全Alchemy→ELのみローカル回帰）
+- AlchemyのCU消費問題の記述
+- バージョン情報（v2.4.2-9117de68763017de6711515fb6e9dcad44bcc0e1）
+
+## 情報源の優先順位
+
+記載内容に迷った場合は以下の順番で判断すること：
+1. このCLAUDE.mdに記載された情報（最優先）
+2. 既存のMarkdownファイルの実録・実測値
+3. 公式ドキュメント（リンク先）
+4. Claude自身の学習データ（最低優先・要確認）
+
+実録・実測値はClaudeが勝手に書き換えないこと。
