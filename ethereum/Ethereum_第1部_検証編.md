@@ -86,12 +86,76 @@ VirtualBoxのポートフォワーディング設定後、ホストPCから
 SSH接続できるようにします。
 
 #### 公開鍵の生成（ホストPC側）
-```bash
-# ed25519方式で鍵ペアを生成（RSAより安全・高速）
-ssh-keygen -t ed25519 -C "your_comment"
-# → ~/.ssh/id_ed25519     （秘密鍵：絶対に外に出さない）
-# → ~/.ssh/id_ed25519.pub （公開鍵：サーバーに登録する）
 
+```bash
+ssh-keygen -t ed25519 -C "your_comment"
+```
+
+このコマンドの各オプションの意味：
+
+| オプション | 意味 | 今回の値 |
+|---|---|---|
+| `ssh-keygen` | SSH鍵ペアを生成するコマンド | - |
+| `-t` | 鍵の種類（type）を指定 | `ed25519` |
+| `-C` | コメントを付ける（comment） | `"your_comment"` |
+
+#### -t ed25519 について
+
+鍵の暗号方式を指定します。
+
+| 方式 | 特徴 | 推奨度 |
+|---|---|---|
+| `ed25519` | 新しい方式。短くて安全・高速 | ★★★ 推奨 |
+| `rsa` | 古くから使われる方式。互換性が高い | ★★ |
+| `ecdsa` | ed25519より古い楕円曲線方式 | ★ |
+
+ed25519は現在最も推奨される方式です。
+鍵が短いにもかかわらず非常に安全で、
+接続速度も速いため特別な理由がなければこれを選びます。
+
+#### -C "your_comment" について
+
+鍵に説明文（コメント）を付けます。
+技術的な動作には影響しません。
+
+用途：複数の鍵を管理するときに「どの鍵か」を識別するためのメモです。
+
+```bash
+# 例：用途や日付をコメントに入れると管理しやすい
+ssh-keygen -t ed25519 -C "homeserver-2025"
+ssh-keygen -t ed25519 -C "ethereum-node"
+
+# コメントなしでも作成可能（-C を省略）
+ssh-keygen -t ed25519
+```
+
+公開鍵ファイルの末尾にコメントが表示されます：
+```
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... homeserver-2025
+                                         ↑ ここがコメント
+```
+
+#### 実行の流れ（全体）
+
+```bash
+$ ssh-keygen -t ed25519 -C "ethereum-node"
+
+# 保存先を聞かれる（そのままEnterでデフォルト）
+Generating public/private ed25519 key pair.
+Enter file in which to save the key (/home/user/.ssh/id_ed25519): [Enter]
+
+# パスフレーズを聞かれる（不要ならEnterを2回）
+Enter passphrase (empty for no passphrase): [Enter]
+Enter same passphrase again: [Enter]
+
+# 完了メッセージ
+Your identification has been saved in /home/user/.ssh/id_ed25519
+Your public key has been saved in /home/user/.ssh/id_ed25519.pub
+The key fingerprint is:
+SHA256:XXXXXXXXXXXXXXXXXXXXXXXXXXXX ethereum-node
+```
+
+```bash
 # 公開鍵の内容を表示（コピーしておく）
 cat ~/.ssh/id_ed25519.pub
 ```
