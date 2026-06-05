@@ -343,6 +343,8 @@ ExecStart=/usr/local/bin/lighthouse bn \
 WantedBy=multi-user.target
 ```
 
+> 📎 **Hoodi チェックポイント同期URL：** [checkpoint-sync.hoodi.ethpandaops.io](https://checkpoint-sync.hoodi.ethpandaops.io)
+
 ```bash
 sudo systemctl daemon-reload && sudo systemctl enable --now lighthouse
 # 同期確認
@@ -377,6 +379,8 @@ sudo -u ethereum lighthouse account validator slashing-protection import \
 |---|---|
 | Hoodi Testnet | `0x9b108015fe433F173696Af3Aa0CF7CDb3E104258` |
 | Mainnet（本番） | `0x388C818CA8B9251b393131C08a736A67ccB19297` |
+
+> 📎 **fee-recipient の設定についての公式ドキュメント：** [Setting the fee recipient for CSM validators](https://docs.lido.fi/run-on-lido/csm/troubleshooting/setting-the-fee-recipient-for-csm-validators/)
 
 ```bash
 sudo vi /etc/systemd/system/lighthouse-vc.service
@@ -434,6 +438,8 @@ sudo journalctl -u lighthouse-vc -n 20 -o cat
 
 ### Step 16　既存ニーモニックから追加鍵を生成
 
+> 📎 **公式リリースページ：** [ethstaker-deposit-cli releases](https://github.com/eth-educators/ethstaker-deposit-cli/releases)
+
 ```bash
 ./deposit existing-mnemonic \
   --num_validators <追加する個数> \
@@ -442,6 +448,8 @@ sudo journalctl -u lighthouse-vc -n 20 -o cat
   --eth1_withdrawal_address <Lido_Withdrawal_Vault_Address> \
   --folder ./validator_keys_additional
 ```
+
+> 📎 **Withdrawal Vault アドレスの確認：** [Lido Deployed Contracts - Hoodi](https://docs.lido.fi/deployed-contracts/hoodi)
 
 > ⚠️ **追加鍵のパスワードは既存鍵と同じパスワードにしてください。** これで同じパスワードファイルを再利用でき、VCを長時間停止せずにインポートが可能になります。
 

@@ -378,6 +378,8 @@ docker compose logs -f --tail 30
 | Hoodi Testnet | `0x9b108015fe433F173696Af3Aa0CF7CDb3E104258` |
 | Mainnet（本番） | `0x388C818CA8B9251b393131C08a736A67ccB19297` |
 
+> 📎 **fee-recipient の設定についての公式ドキュメント：** [Setting the fee recipient for CSM validators](https://docs.lido.fi/run-on-lido/csm/troubleshooting/setting-the-fee-recipient-for-csm-validators/)
+
 SSV dApp での設定手順：
 1. https://app.ssv.network/ → 右上「Fee Address」をクリック
 2. 上記の Lido EL Rewards Vault アドレスを入力
