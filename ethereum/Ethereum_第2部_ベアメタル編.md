@@ -1156,6 +1156,27 @@ fi
 echo -e "\n${CYAN}====================================================${NC}"
 ```
 
+### node_check の出力例と読み方
+
+> 参考実測値（Hoodi Testnet / バリデータ10個 / ベアメタル環境 / 2026年6月時点）
+
+| 項目 | 出力例 | 読み方・判断基準 |
+|---|---|---|
+| [1] Service Status | 全サービス `active` | 正常。`inactive` があれば `journalctl -u <サービス名> -n 50` で調査 |
+| [2] Disk Usage | `189G/1.8T (11%)` | 11%使用で余裕十分。85%超でpruning検討 |
+| [3] Sync Status | `is_syncing: false / sync_distance: 0` | 完全同期済み・正常稼働 |
+| [4] Peer Count | `Lighthouse 185 / Geth 50` | 十分な接続数。0のままならUFWのポート開放を確認 |
+| [5] Attestation | `Successfully published attestations` | 約6.4分ごとに出ていれば報酬発生中 |
+| [6] Builder API | `Builder API: Online` | MEV-Boostがリレーと正常通信中 |
+| [7] Validator Status | 全10鍵 `active_ongoing / 32.00xx ETH` | 全バリデータ正常稼働・残高増加中 |
+| [8] Time Sync | `Last Offset -0.000006s` | 完璧な時刻同期（0.01秒以内が合格ライン） |
+| [9] Fail2Ban | `fail2ban active (Banned: 0)` | セキュリティ正常・不正アクセスなし |
+| [10] Network Traffic | `昨日 140GiB / 今日推定 134GiB` | 正常範囲（月換算約4TBに注意） |
+| [11] Updates | `Updates Available` | `node_safe_stop.sh` 実行後に `sudo apt-get upgrade -y` を実施 |
+| [12] SSV Node | `SSV: active / P2P Peers: 3` | 第3部で構築したSSVノードが正常稼働中 |
+
+---
+
 ### Step 28　node_safe_stop.sh の作成
 
 > 💡 **viエディタの基本操作：** `vi ~/node_safe_stop.sh` を実行後、`i` で入力モード開始 → 下記スクリプトを貼り付け → `Esc` → `:wq` で保存終了。
@@ -1228,6 +1249,8 @@ sudo apt install -y vnstat
 vnstat -d   # 日次表示（1日後から利用可能）
 vnstat -m   # 月次表示
 ```
+
+> 参考実測値（Hoodi Testnet / バリデータ10個 / ベアメタル環境）：昨日 140GiB / 本日推定 134GiB → 月換算 約 4TB
 
 **目安（10バリデータ / ピア数80〜200前後）：**
 
