@@ -1519,31 +1519,64 @@ crontab -l
 
 物理PCのバックアップをサーバー内だけに置くのは危険です。
 SSD故障時にバックアップごと失うリスクがあります。
-Windowsのタスクスケジューラーで週1回、自動的にホストPCへ転送します。
+Windowsのタスクスケジューラーで定期的に自動転送します。
+
+#### 設計の考え方
+
+```
+転送の流れ：
+┌─────────────┐  cron 毎日3時   ┌──────────────────┐
+│  物理PC     │ ─────────────► │  ~/node_backups/ │
+│ (Ubuntu)    │  バックアップ作成 │  （サーバー内）   │
+└─────────────┘                └──────────────────┘
+                                        │
+                                        │ タスクスケジューラー
+                                        │ 週1回（自動転送）
+                                        ▼
+                               ┌──────────────────┐
+                               │  ホストPC        │
+                               │  （Windows）     │
+                               │  iCloud等に保存  │
+                               └──────────────────┘
+```
+
+> 💡 **なぜ転送先をiCloud等にするのか：**
+> ホストPC内のフォルダに保存するだけでなく、
+> クラウドストレージに同期することで
+> ホストPCが故障しても復元できる「3重の保護」になります。
 
 #### ホストPC（Windows）側の設定
 
-任意の場所に以下の内容で `node_backup_transfer.bat` を作成してください。
-（例：`C:\Users\<your_user>\scripts\node_backup_transfer.bat`）
+任意の場所に以下の内容で `auto_backup.bat` を作成してください。
+（例：`C:\Users\<your_user>\scripts\auto_backup.bat`）
 
 ```bat
 @echo off
-REM Ethereumノードバックアップの自動転送スクリプト
-REM タスクスケジューラーで週1回実行する
-SET DEST=C:\Users\<your_user>\node_backups
-SET NODE_IP=<your_tailscale_ip>
-SET NODE_USER=<your_user>
+echo Waiting for Tailscale connection...
+:: PC起動後、Tailscaleが安定するまで60秒待機
+timeout /t 60 /nobreak >nul
 
-REM バックアップ先フォルダを作成（存在しない場合）
-if not exist "%DEST%" mkdir "%DEST%"
+echo Starting Backup Download...
+:: 最新のバックアップをサーバーからダウンロード
+scp -p "<your_user>@<your_tailscale_ip>:~/node_backups/lido_csm_backup_*.tar.gz" "C:\Users\<your_user>\<backup_dest>"
 
-REM 最新のバックアップファイルをホストPCに転送
-scp %NODE_USER%@%NODE_IP%:~/backups/node_backup_*.tar.gz "%DEST%"
-echo Transfer completed: %DATE% %TIME%
+echo Cleaning up old backups...
+:: ダウンロード先フォルダ内の7日より古いファイルを自動削除
+forfiles /P "C:\Users\<your_user>\<backup_dest>" /M lido_csm_backup_*.tar.gz /D -7 /C "cmd /c del @path"
+
+echo Backup and Cleanup Completed.
 ```
 
-> 💡 **Tailscale IP（100.x.x.x）を使う理由：**
-> 自宅内でもTailscale経由で転送することで、
+> 💡 **各コマンドの意味：**
+>
+> | コマンド | 意味 |
+> |---|---|
+> | `timeout /t 60` | 60秒待機。PC起動直後はTailscaleの接続が安定していないため |
+> | `scp -p` | SSH経由でファイルをダウンロード。`-p` でタイムスタンプを保持 |
+> | `forfiles /D -7` | 7日より古いファイルを自動削除。ディスク容量を節約する |
+
+> 💡 **なぜTailscale IP（100.x.x.x）を使うのか：**
+> 自宅内でもTailscale経由にすることで、
 > 将来的に外出先からでも同じスクリプトが動作します。
 
 #### タスクスケジューラーへの登録手順
@@ -1555,14 +1588,14 @@ echo Transfer completed: %DATE% %TIME%
 | 項目 | 設定値 |
 |---|---|
 | 名前 | `Ethereum Node Backup Transfer` |
-| トリガー | 毎週 日曜日 午前4時（cronバックアップの1時間後） |
+| トリガー | 毎週 日曜日 午前4時（cronの1時間後） |
 | 操作 | プログラムの開始 |
-| プログラム | `C:\Users\<your_user>\scripts\node_backup_transfer.bat` |
+| プログラム | `C:\Users\<your_user>\scripts\auto_backup.bat` |
 
-> 💡 **なぜcronの1時間後か：**
-> cronが午前3時にバックアップを作成し、
-> タスクスケジューラーが午前4時に転送することで
-> 「作成完了後に転送」という確実な順序を保てます。
+> 💡 **なぜcronの1時間後（午前4時）に設定するのか：**
+> cronが午前3時にバックアップを作成します。
+> タスクスケジューラーを1時間後の午前4時に設定することで
+> 「作成完了後に転送する」という確実な順序を保てます。
 
 ### バックアップの確認とリストア手順
 
