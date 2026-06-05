@@ -96,6 +96,90 @@ ssh-keygen -t ed25519 -C "your_comment"
 cat ~/.ssh/id_ed25519.pub
 ```
 
+### パスフレーズについて
+
+ssh-keygen 実行時に以下のプロンプトが表示されます：
+
+```
+Enter passphrase (empty for no passphrase):
+Enter same passphrase again:
+```
+
+| 選択 | 方法 | メリット | デメリット |
+|---|---|---|---|
+| パスフレーズなし | Enterを2回押す | 接続がシンプル | 鍵ファイルが盗まれると危険 |
+| パスフレーズあり | 任意の文字列を入力 | 鍵が盗まれても安全 | SSH接続のたびに入力が必要 |
+
+個人のホームサーバー用途では、パスフレーズなし（Enterを2回押す）で問題ありません。重要なのは秘密鍵ファイル（id_ed25519）を外部に漏らさないことです。
+
+### 生成されるファイルの確認
+
+```bash
+ls -la ~/.ssh/
+# id_ed25519     ← 秘密鍵（絶対に外に出さない・共有しない）
+# id_ed25519.pub ← 公開鍵（サーバーに登録する・見られても問題ない）
+```
+
+秘密鍵と公開鍵の関係：
+南京錠（公開鍵）をサーバーに取り付け、鍵（秘密鍵）を自分だけが持つイメージです。
+南京錠は誰が見ても問題ありませんが、鍵は絶対に渡してはいけません。
+
+### 初回SSH接続時のフィンガープリント確認
+
+初めてSSH接続するとき、必ず以下のメッセージが表示されます：
+
+```
+The authenticity of host '[127.0.0.1]:2222' can't be established.
+ED25519 key fingerprint is SHA256:XXXXXXXXXXXXXXXXXXXXXXXXXXXX
+This key is not known by any other names.
+Are you sure you want to continue connecting (yes/no/[fingerprint])?
+```
+
+これは攻撃ではありません。
+「このサーバーに初めて接続しますが、本当に信頼しますか？」という確認メッセージです。
+
+yes と入力してEnterを押してください。
+
+```
+Warning: Permanently added '[127.0.0.1]:2222' (ED25519) to the list of known hosts.
+```
+
+この情報は ~/.ssh/known_hosts に保存されます。
+次回からは同じメッセージは表示されません。
+
+### SSH関連ファイルの役割
+
+```bash
+cat ~/.ssh/known_hosts
+# → 接続したことのあるサーバーの「顔」（フィンガープリント）が記録されている
+```
+
+| ファイル | 役割 |
+|---|---|
+| ~/.ssh/id_ed25519 | 自分の秘密鍵 |
+| ~/.ssh/id_ed25519.pub | 自分の公開鍵 |
+| ~/.ssh/authorized_keys | 接続を許可する公開鍵のリスト（サーバー側） |
+| ~/.ssh/known_hosts | 接続したことのあるサーバーの記録（クライアント側） |
+
+### フィンガープリントとは
+
+サーバーの「顔認証」のようなものです。
+同じIPアドレスでも、フィンガープリントが変わると以下の警告が表示されます：
+
+```
+WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!
+```
+
+これが表示された場合は以下のどちらかです：
+- VMを作り直した（正常）
+- 中間者攻撃の可能性（要注意）
+
+VMの再構築後に表示された場合は以下のコマンドで古い記録を削除してください：
+
+```bash
+ssh-keygen -R "[127.0.0.1]:2222"
+```
+
 #### 公開鍵をVMに登録
 ```bash
 # VM側で実行
