@@ -267,6 +267,9 @@ sudoが登場するたびに以下の説明を添えること：
 - visudoによるNOPASSWD設定の詳細
 - beaconcha.inの実測値（97.39% / 2,250回署名成功 / APR 1.8%）
 - Grafanaの実測値（CPU温度44.9°C / SSD書き込み2〜5 Mb/s）
+- ブロックプロポーザル実録（slot: 3209896 / signing_time_ms: 23 / value: 0.004134718343723172）のタイムライン
+- MEV-Boost 2リレー競争入札の動作記録（Flashbots成功・bloxroute context canceled）
+- ICS合格実績（Identified Community Stakers / 2026年6月5日）
 
 ### 第3部の変更禁止事項
 - SSV v2.4.2のネットワーク名競合パニックの実録

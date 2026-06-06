@@ -609,11 +609,18 @@ cd ethstaker_deposit-cli-*-linux-amd64
   --num_validators <追加する個数> \
   --validator_start_index <次のインデックス番号> \
   --chain hoodi \
-  --eth1_withdrawal_address <Lido_Withdrawal_Vault_Address> \
+  --eth1_withdrawal_address 0x4473dCDDbf77679A643BdB654dbd86D67F8d32f2 \
   --folder ./validator_keys_additional
 ```
 
-> 📎 **Withdrawal Vault アドレスの確認：** [Lido Deployed Contracts - Hoodi](https://docs.lido.fi/deployed-contracts/hoodi)
+> | ネットワーク | Withdrawal Vault アドレス（proxy）|
+> |---|---|
+> | Hoodi Testnet | `0x4473dCDDbf77679A643BdB654dbd86D67F8d32f2` |
+> | Mainnet（本番） | `0xB9D7934878B5FB9610B3fE8A5e441e8fad7E293f` |
+>
+> 📎 公式確認先: https://docs.lido.fi/deployed-contracts/hoodi
+>
+> ⚠️ 必ず **`proxy`** アドレスを使用すること。`impl`（実装アドレス）は内部処理用のため使用しない。
 
 > ⚠️ **追加鍵のパスワードは既存鍵と同じパスワードにしてください。** これで同じパスワードファイルを再利用でき、VCを長時間停止せずにインポートが可能になります。
 
