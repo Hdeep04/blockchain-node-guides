@@ -17,18 +17,21 @@
 
 ---
 
-## 第3部で追加・変更する内容
+## 第3部でやること
 
-| 種別 | 対象 | 備考 |
+第3部は第2部のサーバーへの「追加工事」です。
+既存のGeth・Lighthouse・バリデータ稼働を止めずに進められます（Phase 5の確認作業を除く）。
+
+| 種別 | 対象ファイル／設定 | 作業内容 |
 |---|---|---|
-| 追加 | Docker Engine + Compose | SSVノードの実行環境 |
-| 追加 | SSVノード（`/opt/ssv/`） | DVTオペレーターとして参加 |
-| 追加 | UFWポート開放（12001/UDP・13001/TCP） | SSV P2P通信 |
-| 変更 | `node_check.sh` に `[12]` を追加 | SSVノードの監視 |
-| 確認 | `node_backup.sh` の `/opt/ssv/` 除外設定 | 第2部で記載済み |
+| 新規追加 | Docker Engine + Compose | SSVノードの実行環境を整える |
+| 新規追加 | `/opt/ssv/` | SSVノードの設定・鍵・データを配置 |
+| 追記 | `geth.service` | `--ws` オプションを追加する |
+| 追記 | UFW | P2Pポート（12001/UDP・13001/TCP）を開放 |
+| 追記 | `node_check.sh` | `[12] SSV Node` セクションを追加 |
+| 追記 | `node_backup.sh` | `/opt/ssv/` をバックアップ対象に追加 |
 
-> 💡 **第3部は第2部のサーバーに「追加工事」をするイメージです。**
-> 既存のGeth・Lighthouse・バリデータ稼働を止めずに進められます（Phase 5除く）。
+> 💡 **第3部が不要な方へ：** SSVノードを運用しない場合、第2部で構築した環境は完全に完結しています。第3部はオプションです。
 
 ---
 
@@ -136,7 +139,7 @@ newgrp docker
 
 > 💡 **`newgrp docker` を実行すると新しいシェルセッションが開始されます。**
 > コマンドが通らなくなったように見えても、そのまま続行してください。
-> ターミナルを一度閉じて開き直すか、サーバーにSSHで再接続しても同じ効果があります。
+> ターミナルを一度閉じて開き直すか、SSHで再接続しても同じ効果があります。
 
 ```bash
 # 動作確認
@@ -257,22 +260,31 @@ curl -s http://127.0.0.1:15000/metrics | grep ssv_p2p_peers_connected
 
 ---
 
-## Phase 5　Geth の WebSocket 設定を確認する
+## Phase 5　Geth の WebSocket 設定を追加・確認する
 
 SSVノードはELにWebSocket（ws）で接続します。
-第2部のgeth.serviceには既に `--ws` オプションが含まれているため、
-設定が正しく反映されているかを確認します。
+第2部のgeth.serviceに `--ws` オプションを追加します。
 
 ```bash
-# 現在のgeth.serviceにWSオプションが含まれているか確認
-grep -A2 "\-\-ws" /etc/systemd/system/geth.service
-# 以下が表示されれば設定済み：
-#   --ws
-#   --ws.addr 127.0.0.1
-#   --ws.port 8546
+sudo vi /etc/systemd/system/geth.service
 ```
 
+> 💡 **viエディタの操作：** `i` で入力モード開始 → 編集 → `Esc` → `:wq` で保存終了。
+
+`ExecStart` の `--metrics.addr 127.0.0.1` の直後に以下を追記します：
+
+```ini
+  --ws \
+  --ws.addr 127.0.0.1 \
+  --ws.port 8546 \
+  --ws.api eth,net,engine,admin \
+```
+
+> ⚠️ **この作業中はバリデータ署名が一時停止します。短時間で完了させてください。**
+
 ```bash
+sudo systemctl daemon-reload && sudo systemctl restart geth
+
 # WSエンドポイントへの疎通確認
 curl -s -X POST -H "Content-Type: application/json" \
   --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":1}' \
@@ -280,7 +292,7 @@ curl -s -X POST -H "Content-Type: application/json" \
 # {"jsonrpc":"2.0","id":1,"result":"560048"} のようなレスポンスが返れば正常
 ```
 
-> ✅ レスポンスが返れば Phase 5 完了です。次の Phase 6 へ進んでください。
+> ✅ レスポンスが返れば Phase 5 完了です。
 
 ---
 
@@ -390,12 +402,13 @@ docker compose logs -f --tail 30
 ```bash
 # 登録後：自分のオペレーターIDをWebAppで確認する
 # https://app.ssv.network/ → 「My Account」→「Operators」タブ
-# → 発行されたOperator IDをCLAUDE.mdの「SSV Operator #<ID>」に記録しておく
+# → 発行された Operator ID を控えておく
 ```
 
 > 💡 **Operator IDはnode_check.shの出力に表示されます。**
-> 第2部のnode_check.shを開き、冒頭の以下の行に自分のIDを記入してください：
-> ```
+> Phase 7 で追加する node_check.sh の冒頭行に自分のIDを記入してください：
+>
+> ```bash
 > echo -e "   Lido CSM Operator #<CSM_ID> | SSV Operator #<SSV_ID>       "
 > ```
 
@@ -433,9 +446,21 @@ sudo ufw allow 13001/tcp   # P2Pピア接続維持
 
 ---
 
-## Phase 7　監視スクリプトへのSSV項目追加
+## Phase 7　第2部ファイルへの追記
 
-第2部の `node_check.sh` に `[12] SSV Node` を追記します（スクリプト末尾の `====` 区切りの直前）。
+第3部の構築が完了したら、第2部で作成した以下のファイルに追記します。
+
+### Step A　node_check.sh への SSV セクション追加
+
+`~/node_check.sh` をエディタで開き、末尾の `====` 区切りの直前に以下を追加してください。
+
+```bash
+vi ~/node_check.sh
+```
+
+> 💡 **viエディタの操作：** `G` でファイル末尾に移動 → `====` の行を探す → その直前にカーソルを置いて `i` で入力モード → 下記を貼り付け → `Esc` → `:wq` で保存終了。
+
+追加するコード：
 
 ```bash
 # ==========================================
@@ -470,6 +495,62 @@ fi
 | Container | docker inspect でRestarting ループに陥っていないか |
 | P2P Peers | Metrics APIから、外の世界と繋がっているか（孤立検知） |
 | Sync Slot | 生ログから最新のHead Event受信を抽出し、EL/CL連携を証明 |
+
+その後、スクリプト冒頭の Operator ID 表示行を更新する：
+
+```bash
+# 変更前
+echo -e "   Lido CSM Operator #<CSM_ID> | SSV Operator #<SSV_ID>       "
+
+# 変更後（Phase 6 で確認した自分のIDを記入）
+echo -e "   Lido CSM Operator #<実際のCSM_ID> | SSV Operator #<実際のSSV_ID>       "
+```
+
+---
+
+### Step B　node_backup.sh への SSV バックアップ追加
+
+`~/node_backup.sh` をエディタで開き、以下の変更を加えてください。
+
+```bash
+vi ~/node_backup.sh
+```
+
+> 💡 **viエディタの操作：** `i` で入力モード → 該当箇所を編集 → `Esc` → `:wq` で保存終了。
+
+**変更①：除外オプションを追加する**
+
+`--exclude='/var/lib/lido-csm/keystore_password.txt' \` の直後に以下を追加：
+
+```bash
+    --exclude='/opt/ssv/data/encrypted_private_key.json' \
+    --exclude='/opt/ssv/data/password' \
+```
+
+**変更②：バックアップ対象に /opt/ssv/ を追加する**
+
+`/var/lib/lido-csm/ \` の直後に以下を追加：
+
+```bash
+    /opt/ssv/ \
+```
+
+> ⚠️ **SSV鍵（`encrypted_private_key.json`）とパスワードは除外します。**
+> これらは別デバイスへの手動バックアップが必須です（Phase 2 の注記参照）。
+
+**変更後のバックアップ設計表（更新版）：**
+
+| 種別 | 対象 | 理由 |
+|---|---|---|
+| ✅ 含める | スラッシング保護DB | 二重署名防止の生命線 |
+| ✅ 含める | Systemd設定ファイル | 復旧の高速化 |
+| ✅ 含める | 自作スクリプト | 運用環境の再現 |
+| ✅ 含める | chrony設定 | 時刻同期設定の再現 |
+| ✅ 含める | `/opt/ssv/config/` | SSV設定の再現 |
+| ✅ 含める | `/opt/ssv/data/db/` | SSVスラッシング防止DB |
+| ❌ 除外 | バリデータ鍵本体 | バックアップ経路での漏洩リスク |
+| ❌ 除外 | keystoreパスワード | 同上 |
+| ❌ 除外 | SSV鍵・パスワード | 同上・別デバイスへ手動バックアップ必須 |
 
 ### 運用コマンド集
 
