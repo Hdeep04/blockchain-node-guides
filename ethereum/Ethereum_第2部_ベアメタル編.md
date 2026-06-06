@@ -802,6 +802,117 @@ sudo systemctl restart lighthouse lighthouse-vc
 
 ---
 
+### 【実録】初めてのブロックプロポーザル成功
+
+> 参考実測値（Hoodi Testnet / ベアメタル環境 / 2026年6月6日 slot: 3209896）
+
+MEV-Boost導入後、初めてブロック提案の担当に選ばれた際の実際のログです。
+**「正常な状態のベースライン」として記録しておきます。**
+
+将来メインネットでブロック提案に失敗（Missed Block）した際、
+この成功時のタイムラインと見比べることで原因の切り分けが即座にできます。
+
+> 💡 **「正常な状態（ベースライン）を知っている者だけが、異常を正確に検知できる」**
+
+#### 成功時のタイムライン
+```
+07:49:12.005  Requesting unsigned block    ← VCがBNにブロックを要求
+07:49:12.015  MEV-Boost: getHeader start   ← MEV-Boostがリレーに入札を要求（スロット開始15ms後）
+07:49:12.788  MEV-Boost: best bid          ← Flashbotsリレーが最高入札を返答（773ms後）
+07:49:12.849  Received unsigned block      ← VCがブロックを受信
+07:49:12.873  Publishing signed block      ← VCが署名（signing_time_ms: 23）
+07:49:12.876  submitBlindedBlock start     ← MEV-BoostがリレーにBlinded Blockを提出
+07:49:13.103  successfully submitted       ← Flashbotsへの提出成功 ✅
+07:49:13.104  Successfully published block ← ブロックがチェーンに刻まれた ✅
+```
+
+**スロット開始から提出完了まで：約1.1秒**
+
+#### 各ポイントの読み方
+
+**① 署名時間 23ms はベアメタルの実力**
+```
+signing_time_ms: 23
+```
+
+署名処理がわずか23msで完了しています。
+VMでは100ms超えることもあります。ベアメタル専用機の応答速度が
+そのままブロック提案の成功率に直結します。
+
+**② MEV報酬が発生**
+```
+value=0.004134718343723172
+```
+
+約0.0041 ETHの追加報酬が発生しました。
+通常のアテステーション報酬に加え、ブロック提案時だけ得られる報酬です。
+MEV-Boostを入れることで、この報酬が最大化されます。
+
+**③ 2リレーの競争入札と context canceled は正常動作**
+
+| リレー | 結果 | 理由 |
+|---|---|---|
+| Flashbots | ✅ 成功 | 最高入札を提示・提出成功 |
+| bloxroute | ⚠️ context canceled | Flashbotsが先に成功したため自動キャンセル |
+
+```
+warning: error calling getPayloadV2 on relay
+error="context canceled"
+```
+
+これは**エラーではなく正常動作**です。
+2つのリレーに同時に入札を要求し、先に返ってきた方（Flashbots）を採用、
+もう一方（bloxroute）は自動的にキャンセルされます。
+競争入札の仕組みが正しく機能している証拠です。
+
+**④ block_type: Blinded とは**
+```
+block_type: Blinded
+```
+
+MEV-Boost経由のブロックは「Blinded Block（封筒に入った状態）」として処理されます。
+バリデータはブロックの中身を見ずに署名し、
+リレーが中身を開封してチェーンに提出します。
+これがMEV-Boostの設計上の重要な特徴で、
+バリデータがMEVを横取りできない仕組みになっています。
+
+#### 報酬の行き先（Lido CSMの仕組み）
+```
+ブロックプロポーザル報酬（0.0041 ETH）
+↓
+fee-recipient に設定したアドレス
+↓
+Lido EL Rewards Vault（0x9b108015...）
+↓
+Lidoのスマートコントラクトが自動分配
+├── ステーカー（ETHを預けた人たち）→ 大部分
+├── あなた（CSMオペレーター）→ オペレーター手数料分
+└── Lido DAO → プロトコル手数料
+```
+
+自分のウォレットに直接は入りません。
+Lidoのプールを経由して自動分配されます。
+累積報酬はLido CSMダッシュボードで確認できます。
+
+#### Missed Block 発生時の切り分けチェックリスト
+
+将来、ブロック提案に失敗した際はこのベースラインと比較してください。
+
+| 確認項目 | 正常値（今回の実測） | 異常のサイン |
+|---|---|---|
+| signing_time_ms | **23ms** | 500ms超 → CPUまたはメモリ逼迫を疑う |
+| getHeader応答時間 | **773ms** | 2000ms超 → リレー側の問題を疑う |
+| best bid が返るか | **返った（Flashbots）** | 返らない → リレーURLを確認 |
+| context canceled | **bloxroute側で発生（正常）** | 両リレーともに失敗 → ネットワーク障害を疑う |
+| スロット開始からの総時間 | **約1.1秒** | 11秒超 → タイムアウト（ほぼ確実にMissed） |
+
+> 💡 **node_check.sh でブロック提案の成功を確認するには：**
+> ```bash
+> journalctl -u lighthouse-vc --no-pager | grep "Successfully published block" | tail -5
+> ```
+
+---
+
 ## Phase 6　Prometheus + Grafana 監視スタック
 
 Prometheusが各クライアントからメトリクスを収集し、Grafanaがグラフ化します。
