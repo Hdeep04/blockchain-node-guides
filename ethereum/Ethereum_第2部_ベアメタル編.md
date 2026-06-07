@@ -792,9 +792,28 @@ WantedBy=multi-user.target
 > - `-relay-check` : 起動時にリレーの疎通確認を行います。
 > - `-relays` : 使用するMEV-BoostリレーのURLをカンマ区切りで指定します。
 
+### MEV-Boost の起動
+
 ```bash
 sudo systemctl daemon-reload && sudo systemctl enable --now mev-boost
 ```
+
+### MEV-Boost の起動確認
+
+```bash
+# サービスの状態確認
+sudo systemctl is-active mev-boost
+# → active
+
+# 詳細確認
+sudo systemctl status mev-boost
+
+# ログのリアルタイム確認
+sudo journalctl -u mev-boost -f -o cat
+```
+
+> ✅ **`active` と表示されれば起動成功です。**
+> `POST /eth/v1/builder/validators 200` が出ればリレーへの登録成功です。
 
 ### Step 20　Lighthouse BN/VC にMEV-Boost連携を追加
 
