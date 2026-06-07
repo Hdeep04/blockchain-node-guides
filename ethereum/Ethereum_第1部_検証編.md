@@ -649,16 +649,39 @@ cat validator_keys/deposit_data-*.json | jq '.[] | {network_name, withdrawal_cre
 
 ```bash
 # パスワードファイルを先に用意
+# echo の出力をそのままファイルに書き込む
+# <keystore_password> は鍵生成時に設定した12文字以上のパスワードに置き換える
 echo '<keystore_password>' | sudo tee /var/lib/lido-csm/keystore_password.txt
 sudo chown ethereum:ethereum /var/lib/lido-csm/keystore_password.txt
+# 600 = 所有者のみ読み書き可能。パスワードファイルなので厳格に保護する
 sudo chmod 600 /var/lib/lido-csm/keystore_password.txt
+```
 
-# ethereumユーザーとしてインポート
+> ⚠️ **なぜ ~/csm-artifacts/ から直接インポートできないのか：**
+> `/home/<your_user>/` ディレクトリのパーミッションは `700`（本人以外アクセス不可）です。
+> `lighthouse` は `ethereum` ユーザーとして実行するため、
+> `/home/<your_user>/` 配下のファイルは `Permission denied` になります。
+> `/tmp` を中継地点として使うことで解決します。
+
+```bash
+# 1. 一時ディレクトリの作成
+sudo mkdir -p /tmp/keys_import
+
+# 2. 鍵ファイルをコピー
+sudo cp -r ~/csm-artifacts/ethstaker_deposit-cli-*-linux-amd64/validator_keys /tmp/keys_import/
+
+# 3. 所有者をethereumに変更（これがないとlighthouseが読めない）
+sudo chown -R ethereum:ethereum /tmp/keys_import
+
+# 4. インポート実行
 sudo -u ethereum lighthouse account validator import \
   --network hoodi \
   --datadir /var/lib/lido-csm \
-  --directory ~/csm-artifacts/ethstaker_deposit-cli-*-linux-amd64/validator_keys \
+  --directory /tmp/keys_import/validator_keys \
   --reuse-password
+
+# 5. 一時ファイルの削除（機密データのクリーンアップ・必須）
+sudo rm -rf /tmp/keys_import
 ```
 
 ### Lighthouse VC サービスの作成
