@@ -586,12 +586,13 @@ curl -s http://127.0.0.1:5052/eth/v1/node/peer_count | jq
 mkdir -p ~/csm-artifacts
 cd ~/csm-artifacts
 
-# 公式リリースページから最新版のURLを確認してダウンロード
-# ※ <version> は https://github.com/ethstaker/ethstaker-deposit-cli/releases で確認すること
-wget https://github.com/ethstaker/ethstaker-deposit-cli/releases/download/<version>/ethstaker_deposit-cli-<version>-linux-amd64.tar.gz
+# 最新バージョンのダウンロードURLを自動取得
+RELEASE_URL=$(curl -s https://api.github.com/repos/ethstaker/ethstaker-deposit-cli/releases/latest \
+  | jq -r '.assets[] | select(.name | contains("linux-amd64")) | .browser_download_url')
+wget $RELEASE_URL -O ethstaker_deposit-cli-linux-amd64.tar.gz
 
-# 解凍してディレクトリ移動
-tar -xvf ethstaker_deposit-cli-*-linux-amd64.tar.gz
+# 解凍（ファイル名が変わっても動作する）
+tar -xvf ethstaker_deposit-cli-linux-amd64.tar.gz
 cd ethstaker_deposit-cli-*-linux-amd64
 ```
 
