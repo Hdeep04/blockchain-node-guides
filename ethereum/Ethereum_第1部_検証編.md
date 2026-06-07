@@ -67,8 +67,15 @@ Ethereum は2つのソフトウェアを連携させて動かします。この2
 | CPU | 4コア | 署名検証の並列処理 |
 | ストレージ | 300GB（可変サイズ） | Hoodiの同期DB容量 |
 | **コントローラー** | **NVMe（SATAから変更）** | **I/O速度向上。最重要設定** |
+| **EFI有効化** | **システム → マザーボード → 「EFIを有効化」にチェック** | **これを忘れるとUbuntu Server 24.04が起動しない** |
 
 > ⚠️ **ストレージコントローラーは必ず SATA → NVMe に変更してください。** これを怠ると後述のI/O不足に直結します（本書最大の教訓）。
+
+> ⚠️ **EFIの有効化は必須です。**
+> VirtualBox の「設定 → システム → マザーボード」タブを開き、
+> 「EFIを有効化（特定のOSのみ）」に **必ずチェックを入れてください。**
+> これを忘れるとUbuntu Server 24.04がインストール後に起動しません。
+> （実際に3回作り直して気づいた実録）
 
 ### NATポートフォワーディング設定
 
@@ -79,6 +86,11 @@ VirtualBox の「設定 → ネットワーク → 高度 → ポートフォワ
 | SSH | TCP | 2222 | 22 |
 | Geth P2P | TCP/UDP | 30303 | 30303 |
 | Lighthouse P2P | TCP/UDP | 9000 | 9000 |
+
+> ⚠️ **ホストIPは空白のままにすること。**
+> `127.0.0.1` 以外の値（`172.x.x.x` 等）を入力すると
+> SSH接続が `Connection refused` になります。
+> ホストIP欄は空白のまま保存してください。
 
 ### SSH接続と公開鍵認証の設定
 
@@ -618,16 +630,26 @@ cd ethstaker_deposit-cli-*-linux-amd64
 > 指定するのは必ず **`proxy`** のアドレスです。
 > `impl`（実装アドレス）は内部処理用のため使用しません。
 
-対話フローへの回答：
+対話フローへの回答（全ステップ）：
 
-| プロンプト | 入力 |
-|---|---|
-| Language | English を選択 |
-| Network/Chain | `hoodi`（リストになければ手動入力） |
-| Keystore password | 任意の強力なパスワード（必ず紙に控える） |
-| Compounding (0x02) | `no`（Lido CSMは0x01標準） |
+| # | プロンプト | 入力 | 補足 |
+|---|---|---|---|
+| 1 | `Please choose your language` | `3`（English）を選択してEnter | CLIの表示言語 |
+| 2 | `Internet connectivity detected` | anyキーで続行 | オンライン環境での警告。テストネットは続行OK |
+| 3 | `Repeat your withdrawal address` | `0x4473dCDDbf77679A643BdB654dbd86D67F8d32f2` を再入力 | アドレスの確認入力 |
+| 4 | `Please choose the language of the mnemonic` | Enterキー（English） | ニーモニックの言語。Englishが世界標準 |
+| 5 | `Create a password` | 12文字以上のパスワードを入力 | **12文字未満はエラー。必ず紙に控える** |
+| 6 | `Repeat your keystore password` | 同じパスワードを再入力 | 確認入力 |
+| 7 | `Compounding validators (0x02)?` | Enterキー（no） | **Lido CSMは必ずno。yesにするとWithdrawal Vaultと非互換** |
+| 8 | ニーモニック表示 | **紙に手書きで24単語を書き写す** | スクリーンショット・デジタルメモ厳禁 |
+| 9 | `Please type your mnemonic` | 書き写した24単語をスペース区切りで入力 | 各単語の最初の4文字だけでもOK |
+| 10 | `WARNING: Your clipboard will be CLEARED` | anyキーで続行 | クリップボードの自動消去（安全機能） |
 
-> ⚠️ **24単語のニーモニックは画面に一度だけ表示されます。必ず紙に書き留めてオフライン保管してください。デジタル保存・撮影は厳禁です。**
+> ⚠️ **ステップ7（Compounding）はPectra fork以降に追加された新しい選択肢です。**
+> 手順書作成時には存在しなかった質問のため、必ず `no`（Enter）を選択してください。
+
+> ⚠️ **ステップ8のニーモニードは必ず紙に手書きで保管してください。**
+> これを失うとバリデータ鍵の復元が不可能になります。
 
 ### 生成内容の確認
 
