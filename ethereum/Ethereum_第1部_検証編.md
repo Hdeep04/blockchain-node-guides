@@ -579,7 +579,7 @@ curl -s http://127.0.0.1:5052/eth/v1/node/peer_count | jq
 
 ### ethstaker-deposit-cli の取得
 
-> 📎 **公式リリースページ：** [ethstaker-deposit-cli releases](https://github.com/eth-educators/ethstaker-deposit-cli/releases)
+> 📎 **公式リリースページ：** [ethstaker-deposit-cli releases](https://github.com/ethstaker/ethstaker-deposit-cli/releases)
 
 ```bash
 # 作業ディレクトリの作成
@@ -587,8 +587,8 @@ mkdir -p ~/csm-artifacts
 cd ~/csm-artifacts
 
 # 公式リリースページから最新版のURLを確認してダウンロード
-# ※ <version> は https://github.com/eth-educators/ethstaker-deposit-cli/releases で確認すること
-wget https://github.com/eth-educators/ethstaker-deposit-cli/releases/download/<version>/ethstaker_deposit-cli-<version>-linux-amd64.tar.gz
+# ※ <version> は https://github.com/ethstaker/ethstaker-deposit-cli/releases で確認すること
+wget https://github.com/ethstaker/ethstaker-deposit-cli/releases/download/<version>/ethstaker_deposit-cli-<version>-linux-amd64.tar.gz
 
 # 解凍してディレクトリ移動
 tar -xvf ethstaker_deposit-cli-*-linux-amd64.tar.gz

@@ -588,7 +588,7 @@ sudo journalctl -u lighthouse-vc -n 20 -o cat
 
 ### Step 16　既存ニーモニックから追加鍵を生成
 
-> 📎 **公式リリースページ：** [ethstaker-deposit-cli releases](https://github.com/eth-educators/ethstaker-deposit-cli/releases)
+> 📎 **公式リリースページ：** [ethstaker-deposit-cli releases](https://github.com/ethstaker/ethstaker-deposit-cli/releases)
 
 ```bash
 # 作業ディレクトリの作成
@@ -596,8 +596,8 @@ mkdir -p ~/csm-artifacts
 cd ~/csm-artifacts
 
 # 公式リリースページから最新版をダウンロード
-# ※ <version> は https://github.com/eth-educators/ethstaker-deposit-cli/releases で確認
-wget https://github.com/eth-educators/ethstaker-deposit-cli/releases/download/<version>/ethstaker_deposit-cli-<version>-linux-amd64.tar.gz
+# ※ <version> は https://github.com/ethstaker/ethstaker-deposit-cli/releases で確認
+wget https://github.com/ethstaker/ethstaker-deposit-cli/releases/download/<version>/ethstaker_deposit-cli-<version>-linux-amd64.tar.gz
 
 # 解凍してディレクトリ移動
 tar -xvf ethstaker_deposit-cli-*-linux-amd64.tar.gz
