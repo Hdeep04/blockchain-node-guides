@@ -656,7 +656,7 @@ RELEASE_URL=$(curl -s https://api.github.com/repos/ethstaker/ethstaker-deposit-c
 wget $RELEASE_URL -O ethstaker_deposit-cli-linux-amd64.tar.gz
 
 # 解凍（ファイル名が変わっても動作する）
-tar -xvf ethstaker_deposit-cli-linux-amd64.tar.gz
+tar -xvf ethstaker_deposit-cli-*-linux-amd64.tar.gz
 cd ethstaker_deposit-cli-*-linux-amd64
 ```
 
