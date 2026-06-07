@@ -449,10 +449,28 @@ WantedBy=multi-user.target
 
 > 💡 **VM環境でのピア制限：** `--maxpeers 15` と `--cache 4096` でリソースを抑制しています。後述のVM限界問題の応急処置としても有効です。
 
+### Geth の起動
+
 ```bash
 sudo systemctl daemon-reload && sudo systemctl enable --now geth
+```
+
+### Geth の起動確認
+
+```bash
+# サービスの状態確認（active と表示されればOK）
+sudo systemctl is-active geth
+# → active
+
+# 詳細確認（起動に失敗している場合はここでエラーが確認できる）
+sudo systemctl status geth
+
+# ログのリアルタイム確認
 sudo journalctl -u geth -f -o cat
 ```
+
+> ✅ **`active` と表示されれば起動成功です。**
+> `inactive` や `failed` の場合は `journalctl -u geth -n 50` でエラーを確認してください。
 
 | ログメッセージ | 意味 |
 |---|---|
@@ -575,9 +593,30 @@ WantedBy=multi-user.target
 >
 > 📎 **Hoodi チェックポイント同期URL：** [checkpoint-sync.hoodi.ethpandaops.io](https://checkpoint-sync.hoodi.ethpandaops.io)
 
+### Lighthouse Beacon Node の起動
+
 ```bash
 sudo systemctl daemon-reload && sudo systemctl enable --now lighthouse
+```
 
+### Lighthouse Beacon Node の起動確認
+
+```bash
+# サービスの状態確認
+sudo systemctl is-active lighthouse
+# → active
+
+# 詳細確認
+sudo systemctl status lighthouse
+
+# ログのリアルタイム確認
+sudo journalctl -u lighthouse -f -o cat
+```
+
+> ✅ **`active` と表示されれば起動成功です。**
+> チェックポイント同期が始まると `Starting checkpoint sync` がログに出ます。
+
+```bash
 # 同期確認（is_syncing: false かつ sync_distance: 0 で完了）
 curl -s http://127.0.0.1:5052/eth/v1/node/syncing | jq
 curl -s http://127.0.0.1:5052/eth/v1/node/peer_count | jq
@@ -766,10 +805,46 @@ WantedBy=multi-user.target
 
 > 💡 **VCは `--execution-endpoint` を受け付けません。** BN経由でELと通信するため `--beacon-nodes` を指定します（よくある間違い）。
 
+### Lighthouse Validator Client の起動
+
 ```bash
 sudo systemctl daemon-reload && sudo systemctl enable --now lighthouse-vc
-sudo journalctl -u lighthouse-vc -f -o cat
 ```
+
+### Lighthouse Validator Client の起動確認
+
+```bash
+# サービスの状態確認
+sudo systemctl is-active lighthouse-vc
+# → active
+
+# 詳細確認
+sudo systemctl status lighthouse-vc
+
+# ログのリアルタイム確認（直近20行）
+sudo journalctl -u lighthouse-vc -n 20 -o cat
+```
+
+> ✅ **`active` と表示されれば起動成功です。**
+> しばらく待つと `Successfully published attestations` が出れば署名開始です。
+
+### 全サービスの起動状態を一括確認
+
+```bash
+# 全サービスが active か一括確認
+for svc in geth lighthouse lighthouse-vc; do
+    STATUS=$(systemctl is-active $svc)
+    echo "$svc: $STATUS"
+done
+```
+
+期待する出力：
+geth: active
+lighthouse: active
+lighthouse-vc: active
+
+> ✅ **3つ全て `active` であれば構築完了です。**
+> `inactive` や `failed` があれば該当サービスのログを確認してください。
 
 ### Lido CSM ウィジェットへの登録
 
