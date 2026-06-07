@@ -845,10 +845,8 @@ sudo journalctl -u lighthouse-vc -n 20 -o cat
 
 ```bash
 # 全サービスが active か一括確認
-for svc in geth lighthouse lighthouse-vc; do
-    STATUS=$(systemctl is-active $svc)
-    echo "$svc: $STATUS"
-done
+sudo systemctl is-active geth lighthouse lighthouse-vc
+# 3行全て active と表示されれば正常
 ```
 
 期待する出力：
