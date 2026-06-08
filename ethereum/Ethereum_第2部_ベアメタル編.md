@@ -24,11 +24,17 @@
 | Phase 0 | ブータブルUSB作成・ハード換装・BIOS設定 | ★★ |
 | Phase 1 | 物理PCのOS・ネットワーク・要塞化（SSH/Tailscale/Fail2Ban） | ★★ |
 | Phase 2 | VMのサービス停止 + スラッシング保護データのエクスポート | ★★★ |
-| Phase 3 | Geth/Lighthouse構築 + 鍵移行 + VC起動 | ★★★ |
+| Phase 3 Step 10 | **【先に実行】** ディレクトリ作成 + ethereum ユーザー作成 | ★★★ |
+| Phase 2 Step 3 | **【戻って実行】** 鍵データの転送（VM → 物理PC） | ★★★ |
+| Phase 3 Step 11〜 | Geth/Lighthouse構築 + 鍵移行 + VC起動 | ★★★ |
 | Phase 4 | 鍵を10個に増設（無停止スケールアップ） | ★★ |
 | Phase 5 | MEV-Boost導入 | ★ |
 | Phase 6 | Prometheus + Grafana 監視スタック構築 | ★★ |
 | Phase 7 | sudo不要化の設計と自作スクリプトによる日常運用 | ★★ |
+
+> 💡 **Phase 3 Step 10 → Phase 2 Step 3 → Phase 3 Step 11〜 の順で実行してください。**
+> ディレクトリを先に作ってから鍵を転送し、
+> その後クライアントを構築します。
 
 > ⚠️ **Phase 2のスラッシング保護データ移行を省略すると、新旧両環境で二重署名が起き「一発退場（スラッシング）」になります。最優先で正しく行ってください。**
 
@@ -392,6 +398,24 @@ sudo chown $USER:$USER /tmp/slashing_protection.json
 ### 🔴 Step 3　鍵データを物理PCへ転送する
 #### ～Tailscale VPN経由で安全に運ぶ～
 
+> ⚠️ **鍵転送の前にPhase 3 Step 10を先に実行してください。**
+>
+> 転送先ディレクトリ（`/var/lib/lido-csm/`）は
+> Step 10で作成します。
+> ディレクトリが存在しない状態では転送できません。
+>
+> ```
+> 正しい実行順序：
+>
+> Step 10（Phase 3）← 先に実行
+>   ↓ ディレクトリ作成・ethereum所有に設定
+>
+> Step 3（Phase 2）← その後に実行
+>   ↓ 一時的に $USER 所有に変更
+>   ↓ scpで転送
+>   ↓ ethereum所有に戻す
+> ```
+
 > ⚠️ **Phase 1でTailscaleの設定が完了していることを確認してから実施してください。**
 > Tailscale IP（100.x.x.x）が割り当てられていない場合、鍵転送が完了しません。
 
@@ -414,6 +438,10 @@ scp -r ./validators/* <user>@<dest_tailscale_ip>:/var/lib/lido-csm/validators/
 ## Phase 3　クライアント構築と鍵移行
 
 ### Step 10　サービスユーザーとディレクトリの作成
+
+> 💡 **Step 10は Phase 2 Step 3（鍵転送）の前に実行します。**
+> 転送先ディレクトリをここで作成するため、
+> 先にこのStepを完了させてからStep 3の転送に戻ってください。
 
 ```bash
 # ログイン不可・ホームディレクトリなしの専用ユーザー（セキュリティ）
