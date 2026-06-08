@@ -1026,11 +1026,17 @@ missing trie node ... state is not available
 geth.service: Scheduled restart job, restart counter is at 5525.
 
 #### 原因
-VM環境でのメモリ不足
-↓
-state downloadの途中でDBへの書き込みが中断
-↓
-trieデータベースが不整合状態に
+WARN Sanitizing invalid node buffer size
+provided=1.00GiB updated=256.00MiB
+
+Gethが要求するバッファサイズ（1GB）がVM環境では
+確保できず256MBに強制削減されます。
+state download中にこの状態が続くと
+trieデータベースへの書き込みが不完全になり
+DBが不整合状態になります。
+
+OOMキラーによるメモリ不足とは異なる問題です。
+VM環境固有の制約であり、ベアメタル環境では発生しません。
 
 #### 対処法①　まずサービスの再起動を試みる
 
