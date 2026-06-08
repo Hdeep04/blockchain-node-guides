@@ -238,8 +238,21 @@ services:
 ```bash
 cd /opt/ssv
 docker compose up -d
-docker compose ps
 ```
+
+### SSV Node の起動確認
+
+```bash
+# コンテナの状態確認
+docker ps | grep ssv-node
+# → Up と表示されれば起動成功
+
+# ログのリアルタイム確認
+docker compose logs -f --tail 30
+```
+
+> ✅ `received head event` が出ればチェーンの最新ブロックを追従しています。
+> P2Pピア数が増えていれば他のSSVノードとの接続も確立しています。
 
 ```bash
 # ログの健康診断

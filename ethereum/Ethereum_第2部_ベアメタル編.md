@@ -422,8 +422,29 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload && sudo systemctl enable --now geth
+```
+
+### Geth の起動確認
+
+```bash
+sudo systemctl is-active geth
+# → active
+
+sudo systemctl status geth
 sudo journalctl -u geth -f -o cat
 ```
+
+> ✅ `active` と表示されれば起動成功です。
+
+> ⚠️ **Gethの同期には2段階あります：**
+>
+> | 段階 | 内容 | ベアメタル環境での目安 |
+> |---|---|---|
+> | chain download | ブロックヘッダー・ボディ | 約30〜60分 |
+> | state download | アカウント・ストレージ | 約1〜2時間 |
+>
+> 両方完了して初めて `result: false` になります。
+> この間に次のステップ（Lighthouse BN）の設定を進められます。
 
 ### Step 12　Lighthouse のインストールとBeacon Node サービス化
 
@@ -481,9 +502,29 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload && sudo systemctl enable --now lighthouse
+```
+
+### Lighthouse Beacon Node の起動確認
+
+```bash
+sudo systemctl is-active lighthouse
+# → active
+
+sudo systemctl status lighthouse
+sudo journalctl -u lighthouse -f -o cat
+```
+
+> ✅ `active` と表示されれば起動成功です。
+
+```bash
 # 同期確認
 curl -s http://127.0.0.1:5052/eth/v1/node/syncing | jq
 ```
+
+> 💡 **`el_offline: true` について：**
+> Gethが同期中の場合に一時的に表示されます。
+> Gethの同期完了後に自動的に `false` になります。
+> エラーではありません。
 
 ### Step 13　移行データの権限設定
 
@@ -566,10 +607,20 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload && sudo systemctl enable --now lighthouse-vc
+```
+
+### Lighthouse Validator Client の起動確認
+
+```bash
+sudo systemctl is-active lighthouse-vc
+# → active
+
+sudo systemctl status lighthouse-vc
 sudo journalctl -u lighthouse-vc -n 20 -o cat
 ```
 
-> ✅ **`Successfully published attestations` が出れば、物理PCへの移行成功です。**
+> ✅ `active` と表示されれば起動成功です。
+> しばらく待つと `Successfully published attestations` が出れば署名開始です。
 
 ---
 
@@ -801,18 +852,14 @@ sudo systemctl daemon-reload && sudo systemctl enable --now mev-boost
 ### MEV-Boost の起動確認
 
 ```bash
-# サービスの状態確認
 sudo systemctl is-active mev-boost
 # → active
 
-# 詳細確認
 sudo systemctl status mev-boost
-
-# ログのリアルタイム確認
 sudo journalctl -u mev-boost -f -o cat
 ```
 
-> ✅ **`active` と表示されれば起動成功です。**
+> ✅ `active` と表示されれば起動成功です。
 > `POST /eth/v1/builder/validators 200` が出ればリレーへの登録成功です。
 
 ### Step 20　Lighthouse BN/VC にMEV-Boost連携を追加
