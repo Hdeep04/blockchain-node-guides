@@ -464,6 +464,24 @@ WantedBy=multi-user.target
 
 ### Geth の起動
 
+> 💡 **`systemctl daemon-reload && systemctl enable --now` の意味：**
+>
+> | コマンド | 意味 |
+> |---|---|
+> | `systemctl daemon-reload` | サービスファイルの変更をsystemdに再読み込みさせる |
+> | `systemctl enable --now` | 自動起動を有効化 **かつ** 今すぐ起動（startを兼ねる） |
+>
+> `&&` を使う理由：
+> `daemon-reload` が失敗した場合に起動しないようにするため。
+> `;` では失敗しても次のコマンドが実行されてしまいます。
+>
+> つまり以下の3つを1行で実行しています：
+> ```bash
+> sudo systemctl daemon-reload   # 設定再読み込み
+> sudo systemctl enable geth     # 自動起動設定
+> sudo systemctl start geth      # 今すぐ起動
+> ```
+
 ```bash
 sudo systemctl daemon-reload && sudo systemctl enable --now geth
 ```
@@ -608,6 +626,24 @@ WantedBy=multi-user.target
 
 ### Lighthouse Beacon Node の起動
 
+> 💡 **`systemctl daemon-reload && systemctl enable --now` の意味：**
+>
+> | コマンド | 意味 |
+> |---|---|
+> | `systemctl daemon-reload` | サービスファイルの変更をsystemdに再読み込みさせる |
+> | `systemctl enable --now` | 自動起動を有効化 **かつ** 今すぐ起動（startを兼ねる） |
+>
+> `&&` を使う理由：
+> `daemon-reload` が失敗した場合に起動しないようにするため。
+> `;` では失敗しても次のコマンドが実行されてしまいます。
+>
+> つまり以下の3つを1行で実行しています：
+> ```bash
+> sudo systemctl daemon-reload      # 設定再読み込み
+> sudo systemctl enable lighthouse  # 自動起動設定
+> sudo systemctl start lighthouse   # 今すぐ起動
+> ```
+
 ```bash
 sudo systemctl daemon-reload && sudo systemctl enable --now lighthouse
 ```
@@ -732,10 +768,30 @@ sudo chmod 600 /var/lib/lido-csm/keystore_password.txt
 ```
 
 > ⚠️ **なぜ ~/csm-artifacts/ から直接インポートできないのか：**
-> `/home/<your_user>/` ディレクトリのパーミッションは `700`（本人以外アクセス不可）です。
-> `lighthouse` は `ethereum` ユーザーとして実行するため、
-> `/home/<your_user>/` 配下のファイルは `Permission denied` になります。
-> `/tmp` を中継地点として使うことで解決します。
+>
+> ```
+> 問題：/home/<your_user>/ は700パーミッションの壁
+>
+> ┌──────────────────────────────────────────────┐
+> │ /home/<your_user>/csm-artifacts/keys/         │
+> │  パーミッション: 700（自分以外は入れない壁）   │
+> │                                               │
+> │  インポートは「ethereum ユーザー」として実行   │
+> │  → ethereumは他人 → 壁に阻まれてエラー        │
+> │                                               │
+> │  Permission denied ← 実際に発生するエラー     │
+> └──────────────────────────────────────────────┘
+>
+> 解決策：/tmp（誰でも入れる中立地帯）を経由する
+>
+> ┌──────────────────────────────────────────────┐
+> │ /tmp/keys_import/                             │
+> │  パーミッション: ethereumが読める状態に設定    │
+> │                                               │
+> │  → ethereum ユーザーでインポート成功 ✅        │
+> │  → インポート後すぐに削除（機密保護）          │
+> └──────────────────────────────────────────────┘
+> ```
 
 ```bash
 # 1. 一時ディレクトリの作成
@@ -819,6 +875,24 @@ WantedBy=multi-user.target
 > 💡 **VCは `--execution-endpoint` を受け付けません。** BN経由でELと通信するため `--beacon-nodes` を指定します（よくある間違い）。
 
 ### Lighthouse Validator Client の起動
+
+> 💡 **`systemctl daemon-reload && systemctl enable --now` の意味：**
+>
+> | コマンド | 意味 |
+> |---|---|
+> | `systemctl daemon-reload` | サービスファイルの変更をsystemdに再読み込みさせる |
+> | `systemctl enable --now` | 自動起動を有効化 **かつ** 今すぐ起動（startを兼ねる） |
+>
+> `&&` を使う理由：
+> `daemon-reload` が失敗した場合に起動しないようにするため。
+> `;` では失敗しても次のコマンドが実行されてしまいます。
+>
+> つまり以下の3つを1行で実行しています：
+> ```bash
+> sudo systemctl daemon-reload         # 設定再読み込み
+> sudo systemctl enable lighthouse-vc  # 自動起動設定
+> sudo systemctl start lighthouse-vc   # 今すぐ起動
+> ```
 
 ```bash
 sudo systemctl daemon-reload && sudo systemctl enable --now lighthouse-vc
