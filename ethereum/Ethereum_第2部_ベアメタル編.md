@@ -440,13 +440,75 @@ scp -P 2222 <user>@127.0.0.1:/tmp/slashing_protection.json .
 scp -P 2222 -r <user>@127.0.0.1:/var/lib/ethereum/lighthouse/validators/* ./validators/
 ```
 
+> 💡 **鍵転送には2つの方法があります。どちらを選んでも結果は同じです。**
+>
+> | 方法 | 特徴 |
+> |---|---|
+> | 方法A：chownで一時変更 | 手順が少ない・シンプル |
+> | 方法B：/tmp経由 | 第1部のインポートと同じパターン |
+
+### 方法A：chownで一時変更する方法
+
 ```bash
-# ホストPC → 物理PC（Tailscale IP経由）
+# 【物理PC側】転送先を一時的に $USER 所有に変更
+sudo chown -R $USER:$USER /var/lib/lido-csm/slashing_protection/
+sudo chown -R $USER:$USER /var/lib/lido-csm/validators/
+```
+
+```powershell
+# 【Windows側】ホストPC → 物理PC（Tailscale IP経由）
 scp ./slashing_protection.json <user>@<dest_tailscale_ip>:/var/lib/lido-csm/slashing_protection/
 scp -r ./validators/* <user>@<dest_tailscale_ip>:/var/lib/lido-csm/validators/
 ```
 
-> 💡 **なぜTailscale IP経由か：** 公開ネットワークに鍵を晒さないため、必ずTailscale IP（100.x.x.x）を使います。
+```bash
+# 【物理PC側】転送後にethereum所有に戻す（必須）
+sudo chown -R ethereum:ethereum /var/lib/lido-csm/
+sudo chmod -R 700 /var/lib/lido-csm/validators/
+sudo chmod -R 700 /var/lib/lido-csm/slashing_protection/
+```
+
+### 方法B：/tmp経由で転送する方法（第1部と同じパターン）
+
+```bash
+# 【物理PC側】転送受け取り用の一時ディレクトリを作成
+sudo mkdir -p /tmp/transfer
+sudo chown $USER:$USER /tmp/transfer
+```
+
+```powershell
+# 【Windows側】ホストPC → 物理PC（/tmp経由）
+scp ./slashing_protection.json <user>@<dest_tailscale_ip>:/tmp/transfer/
+scp -r ./validators/* <user>@<dest_tailscale_ip>:/tmp/transfer/
+```
+
+```bash
+# 【物理PC側】/tmp から正式な場所へ移動
+sudo cp -r /tmp/transfer/validators/* /var/lib/lido-csm/validators/
+sudo cp /tmp/transfer/slashing_protection.json \
+  /var/lib/lido-csm/slashing_protection/
+
+# 権限設定
+sudo chown -R ethereum:ethereum /var/lib/lido-csm/
+sudo chmod -R 700 /var/lib/lido-csm/validators/
+sudo chmod -R 700 /var/lib/lido-csm/slashing_protection/
+
+# クリーンアップ（機密データのため必須）
+sudo rm -rf /tmp/transfer
+```
+
+### 転送結果の確認（どちらの方法でも必須）
+
+```bash
+ls -ld /var/lib/lido-csm/validators
+ls -ld /var/lib/lido-csm/slashing_protection
+```
+
+期待する出力：
+drwx------ 3 ethereum ethereum 4096 ... /var/lib/lido-csm/validators
+drwx------ 2 ethereum ethereum 4096 ... /var/lib/lido-csm/slashing_protection
+
+> ✅ 所有者が `ethereum ethereum`・パーミッションが `drwx------` であれば転送完了です。
 
 ---
 
