@@ -1010,3 +1010,130 @@ VM環境でバリデータは稼働しましたが、運用を続けるうちに
 > 次は **第2部・ベアメタル編** で、
 > ここで作った鍵を専用物理PCへ安全に引っ越し、
 > 鍵を10個に増設し、長期安定運用の基盤を作ります。
+
+---
+
+## トラブルシューティング
+
+### 【実録】Geth が起動ループに陥った場合
+
+> 参考実録（Hoodi Testnet / VM環境 / Ubuntu 22.04）
+
+state download中（約4〜5時間）にメモリ不足でGethがクラッシュし、
+以下のエラーが繰り返し出て起動できなくなる場合があります。
+Fatal: Failed to register the Ethereum service:
+missing trie node ... state is not available
+geth.service: Scheduled restart job, restart counter is at 5525.
+
+#### 原因
+VM環境でのメモリ不足
+↓
+state downloadの途中でDBへの書き込みが中断
+↓
+trieデータベースが不整合状態に
+
+#### 対処法①　まずサービスの再起動を試みる
+
+```bash
+# Gethを停止
+sudo systemctl stop geth
+
+# 少し待ってから再起動
+sudo systemctl start geth
+
+# ログを確認
+sudo journalctl -u geth -f -o cat
+```
+
+`Syncing beacon headers` が出れば途中から再開できています。
+**chaindata を削除する前に必ずこれを試してください。**
+
+#### 対処法②　それでも Fatal エラーが続く場合
+
+```bash
+# Gethを停止
+sudo systemctl stop geth
+
+# chaindata を削除（最初から再同期）
+sudo rm -rf /var/lib/ethereum/geth/geth/chaindata
+
+# 再起動
+sudo systemctl start geth
+sudo journalctl -u geth -f -o cat
+```
+
+> ⚠️ **chaindata の削除は最終手段です。**
+> 削除すると最初から再同期（約5〜6時間）になります。
+> 対処法①で解決できる場合はそちらを優先してください。
+
+> 💡 **これはVMの限界です。**
+> 本番運用でベアメタルを推奨する理由のひとつです。
+> 第2部のベアメタル環境では --cache 8192 で安定稼働します。
+
+---
+
+### 同期状態の確認方法
+
+#### Gethの同期状態確認
+
+```bash
+curl -s http://127.0.0.1:8545 \
+  -X POST \
+  -H "Content-Type: application/json" \
+  --data '{"jsonrpc":"2.0","method":"eth_syncing","params":[],"id":1}' | jq
+```
+
+**結果の読み方：**
+
+| 結果 | 意味 |
+|---|---|
+| `"result": false` | 同期完了 ✅ |
+| `currentBlock` が増加中 | chain download進行中 |
+| `syncedAccounts` が増加中 | state download進行中 |
+
+**同期の2段階：**
+
+| 段階 | 内容 | VM環境での目安時間 |
+|---|---|---|
+| chain download | ブロックヘッダー・ボディ | 約1時間 |
+| state download | アカウント・ストレージ | 約4〜5時間 |
+
+> ⚠️ **chain完了後もstate downloadが続きます。**
+> `result: false` になるまで両方の完了が必要です。
+
+#### Lighthouseの同期状態確認
+
+```bash
+sudo journalctl -u lighthouse -f -o cat
+```
+
+**ログの読み方：**
+
+| 項目 | 意味 | 正常値 |
+|---|---|---|
+| `peers` | 接続中のピア数 | 10以上 |
+| `distance` | 最新ブロックまでの距離 | 減少していればOK |
+| `speed` | 同期速度 | 2.00 slots/sec以上 |
+| `est_time` | 完了までの推定時間 | 減少していればOK |
+
+**実際のログ例（Hoodi Testnet / VM環境）：**
+INFO Syncing peers: "15", distance: "2294 slots", speed: "2.00 slots/sec", est_time: "19 mins"
+
+#### Lighthouseの同期完了確認
+
+```bash
+curl -s http://127.0.0.1:5052/eth/v1/node/syncing | jq
+```
+
+**結果の読み方：**
+
+| 項目 | 正常値 | 意味 |
+|---|---|---|
+| `is_syncing` | `false` | 同期完了 ✅ |
+| `is_optimistic` | `false` | Gethの検証完了 ✅ |
+| `sync_distance` | `0` | 最新ブロックに追いついた ✅ |
+
+> 💡 **`is_optimistic: true` は正常な過渡状態です。**
+> Lighthouseの同期は完了していますが、
+> Gethがブロック検証中のため一時的に表示されます。
+> Gethの同期完了後に `false` になります。
