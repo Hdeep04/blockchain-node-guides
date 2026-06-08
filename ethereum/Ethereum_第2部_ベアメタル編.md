@@ -36,35 +36,17 @@
 
 ## 第2部を読み進める前に
 
-### sudo とは何か
+> 💡 **第2部の前提：**
+> 本書は第1部・検証編を完了した方を対象としています。
+> Linux基礎（sudo・vi・chmod・systemctl等）の解説は
+> 第1部を参照してください。
+> 第2部ではベアメタル固有の設定と
+> 本番運用に必要な内容に絞って解説します。
 
-`sudo` = **Super User DO** の略。管理者（root）権限でコマンドを実行するための指示です。
+> 💡 **sudo・パーミッション・ユーザー管理の基礎は
+> 第1部・検証編を参照してください。**
 
-| コマンド | 実行者 | できること |
-|---|---|---|
-| `ls /var/lib/` | 一般ユーザー | 参照のみ |
-| `sudo ls /var/lib/` | root として実行 | 参照・変更・削除すべて可能 |
-
-例え：「ビルの入館証」のようなものです。通常は1階のみ入れますが、`sudo` を付けると全フロアのドアが開きます。だからこそ **必要な場面だけに絞って使う** ことが重要です。
-
-`/var/lib/` 配下のファイルやSystemdサービスの操作はroot権限が必要なため、本書のコマンドに `sudo` が頻繁に登場します。
-
-### vi エディタの基本操作
-
-本書では設定ファイルの編集に `vi` を使います。以下の操作を覚えておけば困りません。
-
-| キー操作 | 意味 |
-|---|---|
-| `i` | 入力モード開始（文字を打てる状態にする） |
-| `Esc` | 入力モード終了 |
-| `:wq` | 保存して終了（write + quit） |
-| `:q!` | 保存せず強制終了（変更を破棄） |
-| 矢印キー | カーソル移動 |
-
-viに不慣れな場合は `nano` エディタも使用できます：
-- 起動: `sudo nano /path/to/file`
-- 保存: `Ctrl + O` → Enter
-- 終了: `Ctrl + X`
+> 💡 **viエディタの基本操作は第1部・検証編を参照してください。**
 
 ### 第2部がなぜ本番なのか
 
@@ -154,7 +136,7 @@ chronyc tracking
 sudo vi /etc/netplan/01-netcfg.yaml
 ```
 
-> 💡 **viエディタの基本操作：** `i` で入力モード開始 → 編集 → `Esc` → `:wq` で保存終了。viが苦手な場合は `sudo nano /etc/netplan/01-netcfg.yaml`（Ctrl+O 保存・Ctrl+X 終了）でも可。
+> 💡 **viエディタの操作は第1部を参照してください。**
 
 ```yaml
 network:
@@ -167,7 +149,6 @@ network:
 
 ```bash
 # パーミッションを必ず 600 に設定（Netplanのセキュリティ要件）
-# 600 = 所有者（root）だけ読み書き可能。グループ・他ユーザーはアクセス不可
 sudo chmod 600 /etc/netplan/01-netcfg.yaml
 sudo netplan apply
 ```
@@ -192,7 +173,7 @@ sudo passwd -l root
 sudo vi /etc/ssh/sshd_config
 ```
 
-> 💡 **viエディタの基本操作：** `i` で入力モード開始 → 編集 → `Esc` → `:wq` で保存終了。viが苦手な場合は `sudo nano /etc/ssh/sshd_config` でも可。
+> 💡 **viエディタの操作は第1部を参照してください。**
 
 設定すべき項目：
 
@@ -241,7 +222,7 @@ sudo cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
 sudo vi /etc/fail2ban/jail.local
 ```
 
-> 💡 **viエディタの基本操作：** `i` で入力モード開始 → 編集 → `Esc` → `:wq` で保存終了。viが苦手な場合は `sudo nano /etc/fail2ban/jail.local` でも可。
+> 💡 **viエディタの操作は第1部を参照してください。**
 > `[sshd]` セクションを探し `enabled = true` になっていることを確認します。
 
 ```bash
@@ -362,7 +343,6 @@ sudo openssl rand -hex 32 | sudo tee /var/lib/ethereum/jwt/jwt.hex > /dev/null
 # 権限設定
 # chown: ディレクトリの所有者をethereum専用ユーザーに変更する（-R は再帰的に全サブディレクトリへ適用）
 sudo chown -R ethereum:ethereum /var/lib/ethereum /var/lib/lido-csm
-# chmod 600: 所有者（ethereum）だけが読み書きできる（6=読4+書2）。他ユーザーはアクセス不可
 sudo chmod 600 /var/lib/ethereum/jwt/jwt.hex
 ```
 
@@ -378,7 +358,7 @@ geth version
 sudo vi /etc/systemd/system/geth.service
 ```
 
-> 💡 **viエディタの基本操作：** `i` で入力モード開始 → 編集 → `Esc` → `:wq` で保存終了。viが苦手な場合は `sudo nano /etc/systemd/system/geth.service` でも可。
+> 💡 **viエディタの操作は第1部を参照してください。**
 
 ```ini
 [Unit]
@@ -413,9 +393,6 @@ WantedBy=multi-user.target
 ```
 
 > 💡 **サービス設定の各項目について：**
-> - `User=ethereum` / `Group=ethereum` : 専用の非特権ユーザーで実行します。rootで動かすよりも、万が一の侵害時の被害を最小限に抑えられます。
-> - `Restart=always` : プロセスが何らかの理由で終了した場合、自動的に再起動します。ノードがクラッシュしてもサービスが自力で復帰します。
-> - `RestartSec=5` : 再起動前に5秒待ちます。即座に再起動するとエラーループに陥るリスクがあるためバッファを設けています。
 > - `--hoodi` : Hoodi テストネットに接続します。
 > - `--datadir` : ブロックチェーンデータの保存先を指定します。
 > - `--authrpc.*` : LighthouseとのEngine API通信の設定です（JWT認証）。
@@ -463,7 +440,7 @@ sudo mv lighthouse /usr/local/bin/ && lighthouse --version
 sudo vi /etc/systemd/system/lighthouse.service
 ```
 
-> 💡 **viエディタの基本操作：** `i` で入力モード開始 → 編集 → `Esc` → `:wq` で保存終了。viが苦手な場合は `sudo nano /etc/systemd/system/lighthouse.service` でも可。
+> 💡 **viエディタの操作は第1部を参照してください。**
 
 ```ini
 [Unit]
@@ -492,8 +469,6 @@ WantedBy=multi-user.target
 ```
 
 > 💡 **サービス設定の各項目について：**
-> - `User=ethereum` / `Group=ethereum` : 専用の非特権ユーザーで実行します。
-> - `Restart=always` / `RestartSec=5` : クラッシュ時に5秒後自動再起動します。
 > - `--network hoodi` : Hoodi テストネットに接続します。
 > - `--execution-endpoint` : GethのEngine APIエンドポイントを指定します（JWT認証で通信）。
 > - `--checkpoint-sync-url` : ethpandaops（Ethereum Foundation公式チーム）が提供するチェックポイント同期URLです。初回起動時に数日かかる同期を数分で完了できます。
@@ -536,7 +511,6 @@ curl -s http://127.0.0.1:5052/eth/v1/node/syncing | jq
 # chown -R: ディレクトリとその中のファイル全ての所有者を再帰的に変更する
 sudo chown -R ethereum:ethereum /var/lib/lido-csm/validators
 sudo chown -R ethereum:ethereum /var/lib/lido-csm/slashing_protection
-# chmod 700: 所有者（ethereum）だけが読み書き実行できる（7=読4+書2+実行1）。他ユーザーはアクセス不可
 sudo chmod -R 700 /var/lib/lido-csm/validators
 sudo chmod -R 700 /var/lib/lido-csm/slashing_protection
 ```
@@ -566,7 +540,7 @@ sudo -u ethereum lighthouse account validator slashing-protection import \
 sudo vi /etc/systemd/system/lighthouse-vc.service
 ```
 
-> 💡 **viエディタの基本操作：** `i` で入力モード開始 → 編集 → `Esc` → `:wq` で保存終了。viが苦手な場合は `sudo nano /etc/systemd/system/lighthouse-vc.service` でも可。
+> 💡 **viエディタの操作は第1部を参照してください。**
 
 ```ini
 [Unit]
@@ -599,8 +573,6 @@ WantedBy=multi-user.target
 ```
 
 > 💡 **サービス設定の各項目について：**
-> - `User=ethereum` / `Group=ethereum` : 専用の非特権ユーザーで実行します。バリデータ鍵を扱うため特に権限の最小化が重要です。
-> - `Restart=always` / `RestartSec=5` : クラッシュ時に5秒後自動再起動します。
 > - `--beacon-nodes` : Beacon Nodeのエンドポイントを指定します（VCはBN経由でELと通信するためこれだけでOK）。
 > - `--suggested-fee-recipient` : ブロック提案時の手数料の送り先です。必ずLido公式のEL Rewards Vaultアドレスを指定します（自分のウォレットを指定するとMEV stealing判定でペナルティ）。
 > - `--metrics` / `--metrics-address` / `--metrics-port 5064` : Prometheusメトリクス収集エンドポイントです。
@@ -815,7 +787,7 @@ mev-boost --version
 sudo vi /etc/systemd/system/mev-boost.service
 ```
 
-> 💡 **viエディタの基本操作：** `i` で入力モード開始 → 編集 → `Esc` → `:wq` で保存終了。viが苦手な場合は `sudo nano /etc/systemd/system/mev-boost.service` でも可。
+> 💡 **viエディタの操作は第1部を参照してください。**
 
 ```ini
 [Unit]
@@ -839,8 +811,6 @@ WantedBy=multi-user.target
 ```
 
 > 💡 **サービス設定の各項目について：**
-> - `User=ethereum` / `Group=ethereum` : 専用の非特権ユーザーで実行します。
-> - `Restart=always` / `RestartSec=5` : クラッシュ時に5秒後自動再起動します。
 > - `-hoodi` : Hoodi テストネット用のリレーと通信します。
 > - `-addr 127.0.0.1:18550` : Lighthouse BNがMEV-Boostに接続するためのローカルアドレス・ポートです。
 > - `-relay-check` : 起動時にリレーの疎通確認を行います。
@@ -1196,7 +1166,7 @@ sudo visudo -f /etc/sudoers.d/node-ops
 
 ### Step 27　node_check.sh の作成
 
-> 💡 **viエディタの基本操作：** `vi ~/node_check.sh` を実行後、`i` で入力モード開始 → 下記スクリプトを貼り付け → `Esc` → `:wq` で保存終了。
+> 💡 **viエディタの操作は第1部を参照してください。**（下記スクリプトを貼り付けて `:wq` で保存）
 
 ```bash
 vi ~/node_check.sh   # 下記内容を貼り付け
@@ -1549,7 +1519,7 @@ sudo systemctl reboot
 
 ### Step 28　node_safe_stop.sh の作成
 
-> 💡 **viエディタの基本操作：** `vi ~/node_safe_stop.sh` を実行後、`i` で入力モード開始 → 下記スクリプトを貼り付け → `Esc` → `:wq` で保存終了。
+> 💡 **viエディタの操作は第1部を参照してください。**（下記スクリプトを貼り付けて `:wq` で保存）
 
 ```bash
 vi ~/node_safe_stop.sh   # 下記内容を貼り付け
@@ -1610,7 +1580,7 @@ fi
 
 ### Step 29　node_backup.sh の作成
 
-> 💡 **viエディタの操作：** `vi ~/node_backup.sh` を実行後、`i` で入力モード開始 → 下記スクリプトを貼り付け → `Esc` → `:wq` で保存終了。
+> 💡 **viエディタの操作は第1部を参照してください。**（下記スクリプトを貼り付けて `:wq` で保存）
 
 ```bash
 vi ~/node_backup.sh
@@ -1662,7 +1632,7 @@ echo "Backup size: $(du -sh $BACKUP_FILE | cut -f1)"
 crontab -e
 ```
 
-> 💡 **viエディタの操作：** ファイルが開いたら `i` で入力モード → 下記1行を末尾に追記 → `Esc` → `:wq` で保存終了。
+> 💡 **viエディタの操作は第1部を参照してください。**（下記1行を末尾に追記して `:wq` で保存）
 
 追記する内容：
 
