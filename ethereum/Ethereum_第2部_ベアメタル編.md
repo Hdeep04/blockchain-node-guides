@@ -348,6 +348,27 @@ sudo systemctl status geth lighthouse lighthouse-vc
 ### 🔴 Step 2　スラッシング保護データをエクスポートする
 #### ～引越し先でも「署名済み」の記憶を引き継ぐ～
 
+> 💡 **スラッシング保護データの実体を理解しておきましょう：**
+>
+> ```
+> /var/lib/ethereum/lighthouse/validators/
+>     ├── slashing_protection.sqlite  ← 実体はここ（SQLiteデータベース）
+>     ├── 0xb4f6.../                  ← バリデータ鍵フォルダ
+>     └── api-token.txt
+> ```
+>
+> スラッシング保護データの実体は
+> `slashing_protection.sqlite` という**SQLiteデータベースファイル**です。
+>
+> **なぜファイルを直接コピーしてはいけないのか：**
+>
+> | 方法 | 安全性 | 理由 |
+> |---|---|---|
+> | `cp slashing_protection.sqlite` | ❌ 危険 | Lighthouseが動いているとDBが破損・二重署名の原因になる |
+> | `lighthouse slashing-protection export` | ✅ 安全 | 世界標準規格（EIP-3076）のJSONに変換。Lighthouse停止後に実行するため安全 |
+>
+> **必ずexportコマンドを使ってJSON化してから転送してください。**
+
 ```bash
 # 過去の署名履歴を世界標準JSONで書き出す。これが二重署名防止の生命線
 sudo -u ethereum lighthouse account validator slashing-protection export \
@@ -579,6 +600,26 @@ sudo chown -R ethereum:ethereum /var/lib/lido-csm/slashing_protection
 sudo chmod -R 700 /var/lib/lido-csm/validators
 sudo chmod -R 700 /var/lib/lido-csm/slashing_protection
 ```
+
+```bash
+# 転送結果と権限の確認（必ず目視確認すること）
+ls -ld /var/lib/lido-csm/validators
+ls -ld /var/lib/lido-csm/slashing_protection
+ls -la /var/lib/lido-csm/validators/
+```
+
+期待する出力：
+```
+drwx------ 3 ethereum ethereum 4096 ... /var/lib/lido-csm/validators
+drwx------ 2 ethereum ethereum 4096 ... /var/lib/lido-csm/slashing_protection
+```
+
+> ✅ **確認ポイント：**
+> - 先頭が `drwx------` であること（700パーミッション）
+> - 所有者・グループが `ethereum ethereum` であること
+> - `validators/` の中に `0x` で始まるフォルダが存在すること
+>
+> これが確認できれば鍵の転送完了です。
 
 ### Step 14　スラッシング保護データのインポート
 
