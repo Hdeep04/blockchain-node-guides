@@ -1021,13 +1021,17 @@ VM環境でバリデータは稼働しましたが、運用を続けるうちに
 
 state download中（約4〜5時間）にメモリ不足でGethがクラッシュし、
 以下のエラーが繰り返し出て起動できなくなる場合があります。
+```
 Fatal: Failed to register the Ethereum service:
 missing trie node ... state is not available
 geth.service: Scheduled restart job, restart counter is at 5525.
+```
 
 #### 原因
+```
 WARN Sanitizing invalid node buffer size
 provided=1.00GiB updated=256.00MiB
+```
 
 Gethが要求するバッファサイズ（1GB）がVM環境では
 確保できず256MBに強制削減されます。
@@ -1078,6 +1082,35 @@ sudo journalctl -u geth -f -o cat
 
 ---
 
+### 問題発生時の調査手順
+
+問題が発生した場合は以下の順番で調査します。
+
+```bash
+# 1. 全サービスのステータス確認
+sudo systemctl is-active geth lighthouse lighthouse-vc
+
+# 2. 異常があればログで原因確認
+sudo journalctl -u geth -n 50 -o cat
+
+# 3. WARN・ERROR・Fatalを重点確認
+sudo journalctl -u geth -o cat | grep -i "warn\|error\|fatal"
+
+# 4. OOMキラー（メモリ不足による強制終了）の確認
+sudo journalctl -k | grep -i "oom\|killed"
+
+# 5. リソース確認
+df -h && free -h
+```
+
+> 💡 **調査の順番が重要です。**
+> まずステータスで「何が止まっているか」を確認し、
+> 次にログで「なぜ止まったか」を確認します。
+> OOMキラーが原因の場合はGethのログではなく
+> カーネルログに記録されます。
+
+---
+
 ### 同期状態の確認方法
 
 #### Gethの同期状態確認
@@ -1123,7 +1156,9 @@ sudo journalctl -u lighthouse -f -o cat
 | `est_time` | 完了までの推定時間 | 減少していればOK |
 
 **実際のログ例（Hoodi Testnet / VM環境）：**
+```
 INFO Syncing peers: "15", distance: "2294 slots", speed: "2.00 slots/sec", est_time: "19 mins"
+```
 
 #### Lighthouseの同期完了確認
 
