@@ -174,11 +174,14 @@ sudo netplan apply
 
 ### Step 6　SSH要塞化
 
+> 💡 **SSH・パーミッション・ユーザー管理の基礎概念は
+> 第1部・検証編を参照してください。**
+
 ```bash
-# SSH公開鍵認証の設定
-mkdir -p ~/.ssh && chmod 700 ~/.ssh   # 700: 自分だけ読み書き実行可能（SSHはこれより広い権限だと接続を拒否する）
-# ~/.ssh/authorized_keys にホストPCの公開鍵（ed25519推奨）を貼り付け
-chmod 600 ~/.ssh/authorized_keys   # 600: 自分だけ読み書き可能
+# SSH公開鍵認証の設定（ホストPCの公開鍵を登録）
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+vi ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
 
 # rootのパスワードをロック
 sudo passwd -l root
