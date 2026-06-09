@@ -792,7 +792,7 @@ drwx------ 2 ethereum ethereum 4096 ... /var/lib/lido-csm/slashing_protection
 
 ```bash
 # 過去の署名履歴を引き継ぎ、二重署名を防ぐ
-sudo -u ethereum lighthouse account validator slashing-protection import \
+sudo -u ethereum /usr/local/bin/lighthouse account validator slashing-protection import \
   --network hoodi \
   --datadir /var/lib/lido-csm \
   /var/lib/lido-csm/slashing_protection/slashing_protection.json
@@ -991,7 +991,7 @@ sudo mkdir -p /tmp/keys_import
 sudo cp -r ./validator_keys_additional/validator_keys /tmp/keys_import
 sudo chown -R ethereum:ethereum /tmp/keys_import
 
-sudo -u ethereum lighthouse account validator import \
+sudo -u ethereum /usr/local/bin/lighthouse account validator import \
   --network hoodi \
   --datadir /var/lib/lido-csm \
   --directory /tmp/keys_import \
@@ -1006,7 +1006,7 @@ sudo systemctl start lighthouse-vc
 
 ```bash
 # 全鍵のリスト確認（10個 + enabled 表示）
-sudo -u ethereum lighthouse account validator list \
+sudo -u ethereum /usr/local/bin/lighthouse account validator list \
   --network hoodi \
   --datadir /var/lib/lido-csm
 
