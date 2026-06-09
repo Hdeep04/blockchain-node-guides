@@ -634,6 +634,30 @@ curl -s http://127.0.0.1:8545 \
 > Engine API経由でGethに同期指示が出され、
 > ブロックの本格的な取り込みがスタートします。
 
+```bash
+# ピア数を確認する
+curl -s -X POST -H "Content-Type: application/json" \
+  --data '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}' \
+  http://127.0.0.1:8545 | jq
+```
+
+> 💡 **ピア（peer）とは：**
+> P2Pネットワークで接続している他のEthereumノードのことです。
+> ピアが多いほど同期が速く・安定します。
+>
+> | ピア数 | 状態 |
+> |---|---|
+> | 0 | 接続中・または問題あり |
+> | 1〜5 | 少ない（同期は遅いが動作する） |
+> | 10以上 | 正常 ✅ |
+>
+> 結果は16進数（例：`0xa` = 10）で返ってきます。
+> VM環境では `--maxpeers 15` に制限しているため最大15ピアです。
+>
+> ⚠️ **Geth単体ではピアが増えにくいです。**
+> Lighthouseを起動してEngine API経由で連携することで
+> 同期が本格的に始まります。
+
 ---
 
 ## Step 3　Lighthouse（合意クライアント）の構築
@@ -756,10 +780,47 @@ sudo journalctl -u lighthouse -f -o cat
 > チェックポイント同期が始まると `Starting checkpoint sync` がログに出ます。
 
 ```bash
-# 同期確認（is_syncing: false かつ sync_distance: 0 で完了）
+# 同期状態を確認する
 curl -s http://127.0.0.1:5052/eth/v1/node/syncing | jq
+```
+
+**結果の読み方：**
+
+| フィールド | 意味 | 完了時の値 |
+|---|---|---|
+| `is_syncing` | 同期中かどうか | `false` ✅ |
+| `is_optimistic` | Gethの検証待ちかどうか | `false` ✅ |
+| `el_offline` | Gethがオフラインかどうか | `false` ✅ |
+| `head_slot` | 現在同期済みのスロット番号 | 最新スロットと一致 |
+| `sync_distance` | 最新スロットまでの距離 | `0` ✅ |
+
+> 💡 **`is_optimistic: true` は正常な過渡状態です。**
+> Lighthouseの同期は完了していますが、
+> Gethがブロック検証中のため一時的に表示されます。
+> Gethの同期完了後に自動的に `false` になります。
+
+> 💡 **`el_offline: true` が表示される場合：**
+> GethがまだAPIを準備中です。
+> しばらく待つと自動的に解消されます。
+
+```bash
+# ピア数を確認する
 curl -s http://127.0.0.1:5052/eth/v1/node/peer_count | jq
 ```
+
+**結果の読み方：**
+
+| フィールド | 意味 | 正常値 |
+|---|---|---|
+| `connected` | 現在接続中のピア数 | 10以上 ✅ |
+| `connecting` | 接続試行中のピア数 | 数個は正常 |
+| `disconnected` | 切断済みのピア数 | 増加し続けるのは問題 |
+
+> 💡 **ピアとは：**
+> P2Pネットワークで接続している他のLighthouseノードのことです。
+> ピアが多いほど同期が速く・安定します。
+> `--target-peers 30` を設定しているため最大30ピアを目標にします。
+> VM環境では10〜20ピア程度が正常です。
 
 ---
 
