@@ -439,6 +439,22 @@ scp -P 2222 <user>@127.0.0.1:/tmp/slashing_protection.json .
 scp -P 2222 -r <user>@127.0.0.1:/var/lib/lido-csm/validators/* ./validators/
 ```
 
+> 💡 **`validators/*` で転送されるファイルについて：**
+>
+> | ファイル | 扱い |
+> |---|---|
+> | `0x...` フォルダ | ✅ 必要（鍵本体） |
+> | `slashing_protection.sqlite` | ⚠️ 転送不要（Step 2でJSON化済み）|
+> | `validator_definitions.yml` | ⚠️ 転送不要（自動生成される）|
+> | `validator_key_cache.json` | ⚠️ 転送不要（自動生成される）|
+> | `api-token.txt` | ⚠️ 転送不要（自動生成される）|
+> | `logs/` | ⚠️ 転送不要 |
+>
+> ベアメタル側でインポートすれば
+> 必要なファイルだけ使われるため
+> そのまま転送しても動作上の問題はありません。
+> 気になる場合は `0x...` フォルダのみを選択して転送してください。
+
 > 💡 **鍵転送には2つの方法があります。どちらを選んでも結果は同じです。**
 >
 > | 方法 | 特徴 |
