@@ -375,9 +375,9 @@ sudo systemctl status geth lighthouse lighthouse-vc
 > 💡 **スラッシング保護データの実体を理解しておきましょう：**
 >
 > ```
-> /var/lib/ethereum/lighthouse/validators/
+> /var/lib/lido-csm/validators/
 >     ├── slashing_protection.sqlite  ← 実体はここ（SQLiteデータベース）
->     ├── 0xb4f6.../                  ← バリデータ鍵フォルダ
+>     ├── 0x<your_validator_pubkey>/  ← バリデータ鍵フォルダ
 >     └── api-token.txt
 > ```
 >
@@ -444,9 +444,9 @@ mkdir validators
 
 ```powershell
 # ==============================
-# 【VM側】で実行する
+# 【ホストPC（Windows PowerShell）】で実行する
 # ==============================
-# VM → ホストPC（Windows PowerShell）
+# VM → ホストPC（ホストPCのPowerShellからVMに接続してコピー）
 scp -P 2222 <user>@127.0.0.1:/tmp/slashing_protection.json .
 scp -P 2222 -r <user>@127.0.0.1:/var/lib/lido-csm/validators/* ./validators/
 ```
@@ -831,10 +831,10 @@ validator-dir path: "/var/lib/lido-csm/validators"
 Loading JSON file into memory & deserializing [done].
 All records imported successfully:
 
-0x8137a7220c2aa5ebbd188a62bd8e43d95efe20cb58f01cad29aa90a8cfc8e59b09f8b13b231f82e805b715ddb06f6484
+0x<your_validator_pubkey>
 
 latest proposed block: none
-latest attestation: epoch 100964 => epoch 100965
+latest attestation: epoch <X> => epoch <Y>
 Import completed successfully.
 Please double-check that the latest blocks and attestations above match your expectations.
 ```
