@@ -65,9 +65,33 @@ Ethereum は2つのソフトウェアを連携させて動かします。この2
 |---|---|---|
 | メモリ | 16384 MB | Gethキャッシュ + Lighthouse動作に必要 |
 | CPU | 4コア | 署名検証の並列処理 |
-| ストレージ | 300GB（可変サイズ） | Hoodiの同期DB容量 |
+| ストレージ | **500GB以上（可変サイズ）** | Gethのchain + state downloadで200GB以上消費する。300GB指定でもLVMの設定によっては100GB程度しか使えない場合がある |
 | **コントローラー** | **NVMe（SATAから変更）** | **I/O速度向上。最重要設定** |
 | **EFI有効化** | **システム → マザーボード → 「EFIを有効化」にチェック** | **これを忘れるとUbuntu Server 24.04が起動しない** |
+
+> ⚠️ **インストール後にディスクの実際の空き容量を確認してください：**
+>
+> ```bash
+> df -h
+> # → /dev/mapper/ubuntu--vg-ubuntu--lv のサイズを確認
+> ```
+>
+> 300GBを指定してもLVMの設定で100GB程度しか割り当てられない場合があります。
+> 以下のコマンドで残り容量を全て割り当てられます：
+>
+> ```bash
+> # LVMの空き容量を確認
+> sudo vgdisplay | grep "Free PE"
+>
+> # 空き容量を全て割り当てる
+> sudo lvextend -l +100%FREE /dev/ubuntu-vg/ubuntu-lv
+> sudo resize2fs /dev/ubuntu-vg/ubuntu-lv
+>
+> # 拡張後の確認
+> df -h
+> ```
+>
+> Gethのstate downloadには200GB以上の空き容量が必要です。
 
 > ⚠️ **ストレージコントローラーは必ず SATA → NVMe に変更してください。** これを怠ると後述のI/O不足に直結します（本書最大の教訓）。
 
@@ -561,6 +585,20 @@ sudo journalctl -u geth -f -o cat
 | `Engine API enabled` | JWT準備完了（Lighthouseが接続可能）✅ |
 | `Snap sync in progress` | スナップ同期中（正常） |
 
+> ⚠️ **Gethは同期が完全に完了するまで絶対に止めないでください。**
+>
+> chain download と state download の2段階が
+> 両方完了する前に停止するとDBが破損します。
+> `"result": false` になるまで見守ってください。
+>
+> | 段階 | 止めた場合の影響 |
+> |---|---|
+> | chain download中 | 途中から再開できる場合あり |
+> | state download中 | DBが破損して最初からやり直しになる場合が多い |
+>
+> VM環境では合計5〜8時間かかる場合があります。
+> その間ホストPCで重い作業をしないことを推奨します。
+
 ### Geth起動後の動作確認
 
 Gethを起動したら、サービスが正常に立ち上がっているか確認します。
@@ -909,11 +947,16 @@ ExecStart=/usr/local/bin/lighthouse vc \
   --metrics \
   --http \
   --http-address 127.0.0.1 \
+  --unencrypted-http-transport \
   --http-port 5062
 
 [Install]
 WantedBy=multi-user.target
 ```
+
+> 💡 **`--unencrypted-http-transport` について：**
+> ローカル環境（127.0.0.1）でHTTP APIを使う場合に必要なオプションです。
+> このオプションがないとVCの起動に失敗します（実証済み）。
 
 > 💡 **`--http-port 5062` は第2部の監視スクリプト（node_check.sh）で
 > バリデータの状態をAPIから取得するために使用します。
