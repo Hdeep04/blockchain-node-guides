@@ -809,7 +809,9 @@ sudo journalctl -u lighthouse-vc -n 20 -o cat
 ```
 
 > ✅ `active` と表示されれば起動成功です。
-> しばらく待つと `Successfully published attestations` が出れば署名開始です。
+> スラッシング保護データのインポート（Step 14）が完了していれば
+> しばらく待つと `Successfully published attestations` が出て署名が開始されます。
+> 署名が始まらない場合はStep 14のインポートが正しく完了しているか確認してください。
 
 ---
 
@@ -908,6 +910,7 @@ cd ethstaker_deposit-cli-*-linux-amd64
 
 sudo systemctl stop lighthouse-vc
 
+sudo mkdir -p /tmp/keys_import
 sudo cp -r ./validator_keys_additional/validator_keys /tmp/keys_import
 sudo chown -R ethereum:ethereum /tmp/keys_import
 
