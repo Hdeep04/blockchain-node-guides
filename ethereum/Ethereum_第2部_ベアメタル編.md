@@ -395,7 +395,7 @@ sudo systemctl status geth lighthouse lighthouse-vc
 
 ```bash
 # 過去の署名履歴を世界標準JSONで書き出す。これが二重署名防止の生命線
-sudo -u ethereum lighthouse account validator slashing-protection export \
+sudo -u ethereum /usr/local/bin/lighthouse account validator slashing-protection export \
   --network hoodi \
   --datadir /var/lib/lido-csm \
   /tmp/slashing_protection.json
