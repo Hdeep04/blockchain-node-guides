@@ -770,8 +770,13 @@ sudo chmod -R 700 /var/lib/lido-csm/slashing_protection
 # 移動結果と権限の確認（必ず目視確認すること）
 ls -ld /var/lib/lido-csm/validators
 ls -ld /var/lib/lido-csm/slashing_protection
-ls -la /var/lib/lido-csm/validators/
+sudo ls -la /var/lib/lido-csm/validators/
 ```
+
+> 💡 **sudoが必要な理由：**
+> `/var/lib/lido-csm/validators/` はethereum所有・700パーミッションのため
+> `<your_user>` では直接中身を確認できません。
+> sudoを使って確認してください。
 
 期待する出力：
 drwx------ 3 ethereum ethereum 4096 ... /var/lib/lido-csm/validators
@@ -781,6 +786,20 @@ drwx------ 2 ethereum ethereum 4096 ... /var/lib/lido-csm/slashing_protection
 > - 先頭が `drwx------` であること（700パーミッション）
 > - 所有者・グループが `ethereum ethereum` であること
 > - `validators/` の中に `0x` で始まるフォルダが存在すること
+
+> 💡 **validators/ の中に以下のファイルが含まれている場合：**
+>
+> | ファイル | 扱い |
+> |---|---|
+> | `0x...` フォルダ | ✅ 必要（鍵本体） |
+> | `slashing_protection.sqlite` | ⚠️ 自動生成される・そのままでOK |
+> | `validator_definitions.yml` | ⚠️ 自動生成される・そのままでOK |
+> | `validator_key_cache.json` | ⚠️ 自動生成される・そのままでOK |
+> | `api-token.txt` | ⚠️ 自動生成される・そのままでOK |
+> | `logs/` | ⚠️ 自動生成される・そのままでOK |
+>
+> これらは lighthouse-vc 起動時に自動的に上書きされるため
+> 削除しなくても動作上の問題はありません。
 
 ### Step 14　スラッシング保護データのインポート
 
