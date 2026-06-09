@@ -904,6 +904,29 @@ sudo -u ethereum lighthouse account validator import \
 sudo rm -rf /tmp/keys_import
 ```
 
+> ⚠️ **インポート完了後はcsm-artifactsも削除してください。**
+>
+> `/tmp/keys_import` は削除しましたが、
+> 元の鍵ファイルが `~/csm-artifacts/` にまだ残っています。
+>
+> インポートが成功したことを確認してから削除します：
+>
+> ```bash
+> # インポート成功の確認
+> sudo -u ethereum lighthouse account validator list \
+>   --network hoodi \
+>   --datadir /var/lib/lido-csm
+> # → 鍵の公開鍵が表示されればインポート済み
+>
+> # 確認できたら削除
+> rm -rf ~/csm-artifacts
+> ```
+>
+> **なぜ削除が必要か：**
+> - 鍵の「正」は `/var/lib/lido-csm/validators/` に移行済み
+> - ニーモニック（24単語）から再生成可能なため削除しても問題なし
+> - ホームディレクトリに鍵を残し続けるセキュリティリスクを排除する
+
 ### Lighthouse VC サービスの作成
 
 > ⚠️ **`--suggested-fee-recipient` は必ずLido公式のEL Rewards Vaultアドレスを指定すること。自分のウォレットアドレスを入れると MEV stealing 判定でペナルティを受けます。**
