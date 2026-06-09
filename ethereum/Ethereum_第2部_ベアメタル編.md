@@ -394,6 +394,20 @@ sudo systemctl status geth lighthouse lighthouse-vc
 > **必ずexportコマンドを使ってJSON化してから転送してください。**
 
 ```bash
+# エクスポート前にパーミッションを確認する
+sudo ls -la /var/lib/lido-csm/validators/slashing_protection.sqlite
+# → -rwx------ 1 ethereum ethereum と表示されればOK
+```
+
+> ⚠️ **`<your_user>` 所有になっている場合は以下で修正してください：**
+> ```bash
+> sudo chown -R ethereum:ethereum /var/lib/lido-csm
+> sudo chmod -R 700 /var/lib/lido-csm/validators
+> ```
+> パーミッションが正しくないと
+> `Unable to open slashing protection database` エラーになります（実証済み）。
+
+```bash
 # 過去の署名履歴を世界標準JSONで書き出す。これが二重署名防止の生命線
 sudo -u ethereum /usr/local/bin/lighthouse account validator slashing-protection export \
   --network hoodi \
@@ -553,8 +567,10 @@ ls -ld /var/lib/lido-csm/slashing_protection
 ```
 
 期待する出力：
+```
 drwx------ 3 ethereum ethereum 4096 ... /var/lib/lido-csm/validators
 drwx------ 2 ethereum ethereum 4096 ... /var/lib/lido-csm/slashing_protection
+```
 
 > ✅ 所有者が `ethereum ethereum`・パーミッションが `drwx------` であれば転送完了です。
 
