@@ -673,6 +673,18 @@ curl -L $RELEASE_URL -o lighthouse.tar.gz && tar -xvf lighthouse.tar.gz
 sudo mv lighthouse /usr/local/bin/ && lighthouse --version
 ```
 
+```bash
+# インストール完了後に不要ファイルを削除する
+rm ~/lighthouse.tar.gz
+# sudo mv lighthouse /usr/local/bin/ で移動済みのため
+# ホームディレクトリのlighthouseバイナリも削除
+rm ~/lighthouse 2>/dev/null || true
+```
+
+> 💡 **なぜ削除するのか：**
+> `sudo mv lighthouse /usr/local/bin/` でバイナリは移動済みです。
+> ホームディレクトリに残った圧縮ファイルは不要なため削除します。
+
 ### Beacon Node サービスの作成
 
 ```bash
@@ -795,7 +807,7 @@ curl -s http://127.0.0.1:5052/eth/v1/node/syncing | jq
 | `sync_distance` | 最新スロットまでの距離 | `0` ✅ |
 
 > 💡 **`is_optimistic: true` は正常な過渡状態です。**
-> Lighthouseの同期は完了していますが、
+> Lighthouseの同期は完了していますが
 > Gethがブロック検証中のため一時的に表示されます。
 > Gethの同期完了後に自動的に `false` になります。
 
@@ -818,7 +830,6 @@ curl -s http://127.0.0.1:5052/eth/v1/node/peer_count | jq
 
 > 💡 **ピアとは：**
 > P2Pネットワークで接続している他のLighthouseノードのことです。
-> ピアが多いほど同期が速く・安定します。
 > `--target-peers 30` を設定しているため最大30ピアを目標にします。
 > VM環境では10〜20ピア程度が正常です。
 
@@ -965,28 +976,35 @@ sudo -u ethereum lighthouse account validator import \
 sudo rm -rf /tmp/keys_import
 ```
 
-> ⚠️ **インポート完了後はcsm-artifactsも削除してください。**
+> ⚠️ **csm-artifactsの削除タイミングに注意：**
 >
-> `/tmp/keys_import` は削除しましたが、
-> 元の鍵ファイルが `~/csm-artifacts/` にまだ残っています。
+> | ファイル | 削除タイミング | 理由 |
+> |---|---|---|
+> | `keystore-*.json` | インポート確認後すぐ | /var/lib/lido-csm/に移行済み |
+> | `deposit_data-*.json` | **Lido CSMで鍵がActiveになった後** | 登録・確認が完了するまで必要 |
+> | `ethstaker_deposit-cli` バイナリ | インポート確認後すぐ | 増設時は再ダウンロード |
 >
-> インポートが成功したことを確認してから削除します：
+> **keystore-*.jsonとバイナリのみ先に削除する場合：**
 >
 > ```bash
 > # インポート成功の確認
 > sudo -u ethereum lighthouse account validator list \
 >   --network hoodi \
 >   --datadir /var/lib/lido-csm
-> # → 鍵の公開鍵が表示されればインポート済み
 >
-> # 確認できたら削除
+> # keystore（鍵本体）だけ先に削除
+> rm ~/csm-artifacts/ethstaker_deposit-cli-*-linux-amd64/validator_keys/keystore-*.json
+> rm ~/csm-artifacts/ethstaker_deposit-cli-*-linux-amd64/deposit
+> ```
+>
+> **Lido CSMウィジェットで鍵がActiveになった後に全削除：**
+>
+> ```bash
 > rm -rf ~/csm-artifacts
 > ```
 >
-> **なぜ削除が必要か：**
-> - 鍵の「正」は `/var/lib/lido-csm/validators/` に移行済み
-> - ニーモニック（24単語）から再生成可能なため削除しても問題なし
-> - ホームディレクトリに鍵を残し続けるセキュリティリスクを排除する
+> ⚠️ **deposit_data-*.json は Lido CSM登録・確認が完了するまで削除しないでください。**
+> ウィジェットでの事前確認・登録に使います。
 
 ### Lighthouse VC サービスの作成
 
