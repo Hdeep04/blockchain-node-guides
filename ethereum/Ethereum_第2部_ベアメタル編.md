@@ -823,6 +823,44 @@ sudo -u ethereum /usr/local/bin/lighthouse account validator slashing-protection
   /var/lib/lido-csm/slashing_protection/slashing_protection.json
 ```
 
+**インポート結果の読み方：**
+```
+No logfile path provided, logging to file is disabled
+Running account manager for hoodi network
+validator-dir path: "/var/lib/lido-csm/validators"
+Loading JSON file into memory & deserializing [done].
+All records imported successfully:
+
+0x8137a7220c2aa5ebbd188a62bd8e43d95efe20cb58f01cad29aa90a8cfc8e59b09f8b13b231f82e805b715ddb06f6484
+
+latest proposed block: none
+latest attestation: epoch 100964 => epoch 100965
+Import completed successfully.
+Please double-check that the latest blocks and attestations above match your expectations.
+```
+
+| 出力 | 意味 | 確認ポイント |
+|---|---|---|
+| `All records imported successfully` | 全鍵の署名履歴のインポート成功 | ✅ 必ず確認 |
+| `latest proposed block: none` | ブロック提案の履歴なし | 提案実績があれば番号が表示される |
+| `latest attestation: epoch X => epoch Y` | 最後に署名したエポックが引き継がれた | ✅ VMでの最後のエポックと一致するか確認 |
+| `Import completed successfully` | インポート完了 | ✅ 必ず確認 |
+
+> ⚠️ **`Please double-check that the latest blocks and attestations above match your expectations.`**
+> 表示された最新エポックが
+> VMでの最後の署名エポックと一致しているか必ず確認してください。
+> 一致していれば署名履歴が正しく引き継がれています。
+
+> 💡 **`latest proposed block: none` について：**
+> ブロック提案の実績がない場合は `none` と表示されます。
+> これは正常です。ブロック提案の実績がある場合は
+> 最後に提案したブロック番号が表示されます。
+
+> 💡 **この履歴が引き継がれることで：**
+> 新しい環境でこのエポック以前のブロックに
+> 誤って署名しようとした場合に自動的にブロックされます。
+> これが二重署名（スラッシング）防止の仕組みです。
+
 ### Step 14-2　パスワードファイルの作成
 
 ```bash
