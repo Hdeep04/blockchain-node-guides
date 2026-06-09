@@ -1642,4 +1642,35 @@ node_check
 | ② | `~/` + alias | `node_check` | 短く呼び出せる・ホームに置いたまま |
 | ③ | `/usr/local/bin/` | `node_check` | システム全体のコマンドとして登録 |
 
+---
+
+## 参考：lighthouse バイナリについて
+
+`lighthouse` はディレクトリではなく**単一の実行バイナリ**です。
+`/usr/local/bin/lighthouse` に配置されており
+サブコマンドの指定によって複数の役割を果たします。
+
+```bash
+# バイナリの場所を確認
+which lighthouse
+# → /usr/local/bin/lighthouse
+
+# バイナリであることを確認
+file /usr/local/bin/lighthouse
+# → ELF 64-bit LSB executable ...
+```
+
+| 使い方 | 役割 | 起動方法 |
+|---|---|---|
+| `lighthouse bn` | Beacon Node（チェーン同期） | systemd（lighthouse.service） |
+| `lighthouse vc` | Validator Client（署名・アテステーション） | systemd（lighthouse-vc.service） |
+| `lighthouse account validator import` | バリデータ鍵のインポート | 手動実行 |
+| `lighthouse account validator slashing-protection export` | 署名履歴のエクスポート | 手動実行 |
+| `lighthouse account validator slashing-protection import` | 署名履歴のインポート | 手動実行 |
+
+> 💡 **1つのバイナリで全ての操作ができます。**
+> `lighthouse bn` と `lighthouse vc` は
+> systemdサービスとして常時起動しますが
+> `lighthouse account ...` は必要な時だけ手動で実行します。
+
 > 💡 **第2部では方法②（エイリアス）を採用しています。**
