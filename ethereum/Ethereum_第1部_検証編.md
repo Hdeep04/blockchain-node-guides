@@ -1381,6 +1381,48 @@ sudo journalctl -u geth -f -o cat
 
 ---
 
+### 同期トラブル発生時の基本方針
+
+> 💡 **データを削除する前にリソースを調整してください。**
+> 容量不足・メモリ不足のまま再同期しても同じ問題が繰り返されます。
+
+#### Step 1　リソースを確認・調整する
+
+```bash
+# ディスク空き容量を確認
+df -h
+# → Use% が80%以上 → LVM拡張が必要
+
+# LVM拡張
+sudo vgdisplay | grep "Free PE"
+sudo lvextend -l +100%FREE /dev/ubuntu-vg/ubuntu-lv
+sudo resize2fs /dev/ubuntu-vg/ubuntu-lv
+df -h
+
+# メモリの状況を確認
+free -h
+# → available が 2GB以下 → ホストPCの他のアプリを閉じる
+```
+
+> 💡 **ホストPCのメモリ使用状況がVMの安定性に直結します。**
+> state download中はブラウザのタブを最小限にし
+> 他の重いアプリは終了させることを推奨します。
+
+#### Step 2　リソース調整後に再同期する
+
+```bash
+# まず単純再起動を試みる（データ削除は最後の手段）
+sudo systemctl stop geth
+sudo systemctl start geth
+sudo journalctl -u geth -f -o cat
+# → Syncing beacon headers が出れば途中から再開できている
+```
+
+> ⚠️ **データを削除して再同期する場合は必ずリソース調整後に行ってください。**
+> 調整せずに再同期しても同じ問題が繰り返されます（実証済み）。
+
+---
+
 ### 問題発生時の調査手順
 
 問題が発生した場合は以下の順番で調査します。
