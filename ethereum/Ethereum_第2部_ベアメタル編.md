@@ -397,7 +397,7 @@ sudo systemctl status geth lighthouse lighthouse-vc
 # 過去の署名履歴を世界標準JSONで書き出す。これが二重署名防止の生命線
 sudo -u ethereum lighthouse account validator slashing-protection export \
   --network hoodi \
-  --datadir /var/lib/ethereum/lighthouse \
+  --datadir /var/lib/lido-csm \
   /tmp/slashing_protection.json
 
 # 所有者を自分に変更（scpでコピーできるようにする）
@@ -405,13 +405,9 @@ sudo chown $USER:$USER /tmp/slashing_protection.json
 ```
 
 > 💡 **`--datadir` のパスについて：**
-> スラッシング保護データはLighthouse Beacon Node（`/var/lib/ethereum/lighthouse`）に保存されます。
-> バリデータ鍵（`/var/lib/lido-csm`）とは保存場所が異なります。
-> - `/var/lib/ethereum/lighthouse` → BNのデータ（スラッシング保護DB・同期データ）
-> - `/var/lib/lido-csm` → バリデータ鍵・VCのデータ
->
-> 第1部でLido CSM用にインポートした際の `--datadir /var/lib/lido-csm` と
-> 混同しやすいポイントです。エクスポートは必ず `/var/lib/ethereum/lighthouse` で行ってください。
+> 第1部（VM環境）では鍵もスラッシング保護DBも
+> `/var/lib/lido-csm` 配下に保存されています。
+> エクスポートは `/var/lib/lido-csm` を指定してください。
 
 ### 🔴 Step 3　鍵データを物理PCへ転送する
 #### ～Tailscale VPN経由で安全に運ぶ～
