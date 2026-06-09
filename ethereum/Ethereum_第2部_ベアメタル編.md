@@ -700,14 +700,8 @@ curl -s http://127.0.0.1:5052/eth/v1/node/syncing | jq
 
 ### Step 13　移行データの権限設定
 
-```bash
-# 転送した鍵の所有者をethereumに変更（これをしないとLighthouseが読めない）
-# chown -R: ディレクトリとその中のファイル全ての所有者を再帰的に変更する
-sudo chown -R ethereum:ethereum /var/lib/lido-csm/validators
-sudo chown -R ethereum:ethereum /var/lib/lido-csm/slashing_protection
-sudo chmod -R 700 /var/lib/lido-csm/validators
-sudo chmod -R 700 /var/lib/lido-csm/slashing_protection
-```
+> 💡 **Step 3（鍵転送）でchown・chmodは既に実施済みです。**
+> ここでは転送結果が正しいことを確認します。
 
 ```bash
 # 転送結果と権限の確認（必ず目視確認すること）
@@ -730,6 +724,12 @@ drwx------ 2 ethereum ethereum 4096 ... /var/lib/lido-csm/slashing_protection
 > これが確認できれば鍵の転送完了です。
 
 ### Step 14　スラッシング保護データのインポート
+
+> 💡 **ここで使うファイルについて：**
+> `/var/lib/lido-csm/slashing_protection/slashing_protection.json` は
+> Phase 2 Step 2でVMからエクスポートし
+> Step 3で物理PCのこのパスに転送したファイルです。
+> このファイルがVMでの署名履歴を引き継ぐ役割を担います。
 
 ```bash
 # 過去の署名履歴を引き継ぎ、二重署名を防ぐ
@@ -843,7 +843,8 @@ RELEASE_URL=$(curl -s https://api.github.com/repos/ethstaker/ethstaker-deposit-c
 wget $RELEASE_URL -O ethstaker_deposit-cli-linux-amd64.tar.gz
 
 # 解凍（ファイル名が変わっても動作する）
-tar -xvf ethstaker_deposit-cli-*-linux-amd64.tar.gz
+# sha256ファイルを除外して解凍する（*のワイルドカードでsha256が引っかかる場合がある）
+tar -xvf $(ls ethstaker_deposit-cli-*-linux-amd64.tar.gz | grep -v sha256)
 cd ethstaker_deposit-cli-*-linux-amd64
 ```
 
@@ -901,6 +902,23 @@ cd ethstaker_deposit-cli-*-linux-amd64
 │  4. sudo rm -rf で /tmp の機密データを即座に削除（必須）         │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+> ⚠️ **`--reuse-password` を使う前提条件：**
+> 追加鍵のパスワードが既存鍵と同じであること、かつ
+> パスワードファイルが以下のパスに存在することを確認してください。
+>
+> ```bash
+> # パスワードファイルの存在確認
+> sudo ls -la /var/lib/lido-csm/keystore_password.txt
+> # → -rw------- 1 ethereum ethereum と表示されればOK
+> ```
+>
+> 表示されない場合は以下で作成してください：
+> ```bash
+> echo '<keystore_password>' | sudo tee /var/lib/lido-csm/keystore_password.txt
+> sudo chown ethereum:ethereum /var/lib/lido-csm/keystore_password.txt
+> sudo chmod 600 /var/lib/lido-csm/keystore_password.txt
+> ```
 
 ```bash
 # なぜ /tmp 経由か：
