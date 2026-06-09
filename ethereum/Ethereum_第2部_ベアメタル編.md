@@ -781,6 +781,32 @@ drwx------ 2 ethereum ethereum 4096 ... /var/lib/lido-csm/slashing_protection
 >
 > これが確認できれば鍵の移動完了です。
 
+> 💡 **validator_definitions.yml が転送済みの場合：**
+>
+> ```bash
+> sudo cat /var/lib/lido-csm/validators/validator_definitions.yml
+> ```
+>
+> 以下の内容が確認できれば鍵のインポートコマンドは不要です。
+> VCを起動すると自動的に鍵を読み込みます。
+>
+> ```yaml
+> - enabled: true
+>   voting_public_key: 0x8137a7...
+>   voting_keystore_path: /var/lib/lido-csm/validators/0x.../keystore-*.json
+> ```
+>
+> ⚠️ **`voting_keystore_password` に平文パスワードが記載されている場合：**
+> テストネットでは問題ありませんが
+> 本番環境では以下のコマンドでパスワードを削除し
+> keystore_password.txt を使う方式に変更してください：
+>
+> ```bash
+> # validator_definitions.ymlのパスワード行を削除
+> sudo -u ethereum sed -i '/voting_keystore_password/d' \
+>   /var/lib/lido-csm/validators/validator_definitions.yml
+> ```
+
 ### Step 14　スラッシング保護データのインポート
 
 > 💡 **ここで使うファイルについて：**
