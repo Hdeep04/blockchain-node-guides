@@ -67,7 +67,7 @@ Ethereum は2つのソフトウェアを連携させて動かします。この2
 | CPU | 4コア | 署名検証の並列処理 |
 | ストレージ | **500GB以上（可変サイズ）** | Gethのchain + state downloadで200GB以上消費する。300GB指定でもLVMの設定によっては100GB程度しか使えない場合がある |
 | **コントローラー** | **NVMe（SATAから変更）** | **I/O速度向上。最重要設定** |
-| **EFI有効化** | **システム → マザーボード → 「EFIを有効化」にチェック** | **これを忘れるとUbuntu Server 24.04が起動しない** |
+| **EFI有効化** | **システム → マザーボード → 「EFIを有効化」にチェック** | **これを忘れるとUbuntu Server 22.04が起動しない** |
 
 > ⚠️ **インストール後にディスクの実際の空き容量を確認してください：**
 >
@@ -904,9 +904,23 @@ cd ethstaker_deposit-cli-*-linux-amd64
 ### 生成内容の確認
 
 ```bash
+# 作業ディレクトリに移動してから確認する
+cd ~/csm-artifacts/ethstaker_deposit-cli-*-linux-amd64
+
 # network_name が hoodi、withdrawal_credentials が 0x01 始まりか確認
 cat validator_keys/deposit_data-*.json | jq '.[] | {network_name, withdrawal_credentials}'
 ```
+
+または フルパスで確認する場合：
+
+```bash
+cat ~/csm-artifacts/ethstaker_deposit-cli-*-linux-amd64/validator_keys/deposit_data-*.json \
+  | jq '.[] | {network_name, withdrawal_credentials}'
+```
+
+> 💡 **なぜcdまたはフルパスが必要か：**
+> `cat validator_keys/...` はカレントディレクトリからの相対パスです。
+> 別のディレクトリにいると「そんなファイルはない」エラーになります。
 
 | 確認項目 | 正しい値 |
 |---|---|
@@ -1205,17 +1219,46 @@ cat ~/csm-artifacts/ethstaker_deposit-cli-*-linux-amd64/validator_keys/deposit_d
 sudo systemctl status geth lighthouse lighthouse-vc
 ```
 
+**出力の読み方：**
+
+| 表示 | 意味 | 対処 |
+|---|---|---|
+| `Active: active (running)` | 正常稼働中 ✅ | そのまま続行 |
+| `Active: inactive (dead)` | 停止している | `systemctl start <サービス名>` で起動 |
+| `Active: failed` | エラーで停止 | `journalctl -u <サービス名> -n 50` でログ確認 |
+| `Active: activating` | 起動中 | しばらく待つ |
+
 ### 署名ログの確認
 
 ```bash
 sudo journalctl -u lighthouse-vc -n 20 -o cat | grep attestation
 ```
 
-| ログメッセージ | 意味 |
-|---|---|
-| `Successfully published attestations` | 署名成功・報酬発生 ✅ |
-| `All validators inactive` | Lidoのデポジット処理待ち（数時間〜） |
-| `is_optimistic: true` | まだ完全同期していない（待機） |
+| ログメッセージ | 意味 | 対処 |
+|---|---|---|
+| `Successfully published attestations` | 署名成功・報酬発生 ✅ | そのまま運用 |
+| `All validators active` | バリデータがアクティブ状態 ✅ | 署名待ち |
+| `All validators inactive` | Lidoのデポジット処理待ち | 数時間〜数日待つ |
+| `is_optimistic: true` | まだ完全同期していない | Geth同期完了まで待つ |
+
+> 💡 **`All validators inactive` の間、署名・報酬は発生しません。**
+>
+> Lido CSMにdeposit_dataを提出後、以下の流れで進みます：
+>
+> ```
+> deposit_data提出
+>         ↓
+> Lidoのスマートコントラクトが32ETHをデポジット
+>         ↓
+> バリデータがキューに入る（数時間〜数日）
+>         ↓
+> activation_epoch に到達
+>         ↓
+> All validators active → 署名開始・報酬発生 ✅
+> ```
+>
+> この間はノードを稼働させたまま待つだけでOKです。
+> beaconcha.in でバリデータのステータスを確認できます。
 
 ### beaconcha.in で確認
 
@@ -1318,7 +1361,7 @@ VM環境でバリデータは稼働しましたが、運用を続けるうちに
 
 > 参考実録（Hoodi Testnet / VM環境 / Ubuntu 22.04）
 
-state download中（約4〜5時間）にメモリ不足でGethがクラッシュし、
+state download中にGethがクラッシュし、
 以下のエラーが繰り返し出て起動できなくなる場合があります。
 ```
 Fatal: Failed to register the Ethereum service:
@@ -1326,7 +1369,27 @@ missing trie node ... state is not available
 geth.service: Scheduled restart job, restart counter is at 5525.
 ```
 
-#### 原因
+#### 原因①　ディスク容量不足（最も多い原因）
+
+```bash
+# まずディスク容量を確認する
+df -h
+# → Use% が90%以上の場合は容量不足が原因
+```
+
+LVMのデフォルト設定では500GBを指定しても
+実際の割り当てが少ない場合があります。
+以下で拡張してください：
+
+```bash
+sudo lvextend -l +100%FREE /dev/ubuntu-vg/ubuntu-lv
+sudo resize2fs /dev/ubuntu-vg/ubuntu-lv
+df -h
+```
+
+> ⚠️ **state downloadには200GB以上の空き容量が必要です（実証済み）。**
+
+#### 原因②　Gethのバッファサイズ不足
 ```
 WARN Sanitizing invalid node buffer size
 provided=1.00GiB updated=256.00MiB
@@ -1335,10 +1398,7 @@ provided=1.00GiB updated=256.00MiB
 Gethが要求するバッファサイズ（1GB）がVM環境では
 確保できず256MBに強制削減されます。
 state download中にこの状態が続くと
-trieデータベースへの書き込みが不完全になり
-DBが不整合状態になります。
-
-OOMキラーによるメモリ不足とは異なる問題です。
+trieデータベースへの書き込みが不完全になります。
 VM環境固有の制約であり、ベアメタル環境では発生しません。
 
 #### 対処法①　まずサービスの再起動を試みる
@@ -1363,21 +1423,33 @@ sudo journalctl -u geth -f -o cat
 # Gethを停止
 sudo systemctl stop geth
 
-# chaindata を削除（最初から再同期）
-sudo rm -rf /var/lib/ethereum/geth/geth/chaindata
+# geth/geth ディレクトリを完全削除
+# chaindataだけでなくgeth/geth全体を削除する
+# （chaindataだけではstateデータが残り不整合が解消されない場合がある）
+sudo rm -rf /var/lib/ethereum/geth/geth
 
-# 再起動
+# ディレクトリ再作成とパーミッション設定（必須）
+# 削除後はethereum所有のディレクトリが消えているため
+# 再作成しないとGethが起動できない
+sudo mkdir -p /var/lib/ethereum/geth
+sudo chown -R ethereum:ethereum /var/lib/ethereum/geth
+
+# Lighthouseを先に起動してからGethを起動
+sudo systemctl start lighthouse
 sudo systemctl start geth
 sudo journalctl -u geth -f -o cat
 ```
 
+> ⚠️ **削除後は必ず `mkdir` と `chown` でディレクトリを再作成してください。**
+> これを省略するとGethが起動できません（実証済み）。
+
 > ⚠️ **chaindata の削除は最終手段です。**
-> 削除すると最初から再同期（約5〜6時間）になります。
-> 対処法①で解決できる場合はそちらを優先してください。
+> 削除すると最初から再同期（約5〜8時間）になります。
+> 対処法①・リソース調整を先に試してください。
 
 > 💡 **これはVMの限界です。**
 > 本番運用でベアメタルを推奨する理由のひとつです。
-> 第2部のベアメタル環境では --cache 8192 で安定稼働します。
+> 第2部のベアメタル環境では安定稼働します。
 
 ---
 
