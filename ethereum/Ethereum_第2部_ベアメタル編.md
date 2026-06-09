@@ -797,6 +797,27 @@ sudo -u ethereum /usr/local/bin/lighthouse account validator slashing-protection
   /var/lib/lido-csm/slashing_protection/slashing_protection.json
 ```
 
+### Step 14-2　パスワードファイルの作成
+
+```bash
+# バリデータ鍵のパスワードファイルを作成する
+# <keystore_password> は鍵生成時に設定したパスワードに置き換える
+echo '<keystore_password>' | sudo tee /var/lib/lido-csm/keystore_password.txt
+sudo chown ethereum:ethereum /var/lib/lido-csm/keystore_password.txt
+sudo chmod 600 /var/lib/lido-csm/keystore_password.txt
+
+# 確認
+sudo ls -la /var/lib/lido-csm/keystore_password.txt
+# → -rw------- 1 ethereum ethereum と表示されればOK
+```
+
+> 💡 **なぜパスワードファイルが必要か：**
+> lighthouse-vcは起動時にバリデータ鍵（keystore）を
+> 復号するためのパスワードを必要とします。
+> このファイルがないとVCが起動できません。
+> 鍵生成時（第1部 Step 4）に設定したパスワードと
+> 同じものを入力してください。
+
 ### Step 15　Lighthouse VC のサービス化と起動
 
 > ⚠️ **`--suggested-fee-recipient` は必ずLido公式のEL Rewards Vaultアドレスを指定すること。自分のウォレットアドレスを入れると MEV stealing 判定となり、ボンドロック＋罰金ペナルティが科せられます。**
