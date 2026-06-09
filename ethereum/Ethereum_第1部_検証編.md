@@ -1034,9 +1034,19 @@ lighthouse-vc: active
 |---|---|
 | 1. Wallet接続 | MetaMask等を接続（Hoodiテストネットであることを確認） |
 | 2. Create Operator | 「Join as a Node Operator」を選択 |
-| 3. Deposit Data | `deposit_data-*.json` の中身をそのまま貼り付け |
+| 3. Deposit Data | `deposit_data-*.json` の中身を **`[` と `]` を含めて** そのまま貼り付け |
 | 4. Bond支払い | 必要なBond（テストETH）をデポジット |
 | 5. 確認 | Operator ID が発行されれば登録完了 |
+
+> ⚠️ **`deposit_data` の貼り付け方：**
+> ファイルの中身は `[{...}]` という形式です。
+> `[` と `]` を含めてファイル全体を貼り付けてください。
+> `[` を省略するとLido CSMウィジェットでエラーになります（実証済み）。
+>
+> ```bash
+> # 貼り付け前にファイルの中身を確認する
+> cat ~/csm-artifacts/ethstaker_deposit-cli-*-linux-amd64/validator_keys/deposit_data-*.json
+> ```
 
 #### deposit_dataの内容確認方法
 ```bash
