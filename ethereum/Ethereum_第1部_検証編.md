@@ -1077,6 +1077,54 @@ cat validator_keys/deposit_data-*.json | jq '.[] | {
 
 ---
 
+### シェルスクリプトの実行方法
+
+本書では `.sh` スクリプトを使う場面があります。
+まず実行権限を付与します：
+
+```bash
+chmod +x ~/node_check.sh
+```
+
+実行方法は3通りあります。自分の環境に合った方法を選んでください。
+
+**方法①：フルパス指定**
+```bash
+~/node_check.sh
+```
+> `~/` はホームディレクトリの省略形です。どこからでも実行できます。
+
+**方法②：エイリアス登録**
+```bash
+echo "alias node_check='~/node_check.sh'" >> ~/.bashrc
+source ~/.bashrc
+node_check
+```
+> `~/.bashrc` に登録することで
+> ターミナルを開くたびに自動的に使えます。
+
+**方法③：/usr/local/bin に配置（コマンド化）**
+```bash
+sudo cp ~/node_check.sh /usr/local/bin/node_check
+sudo chmod +x /usr/local/bin/node_check
+node_check
+```
+> `/usr/local/bin/` はユーザーが作ったコマンドを置く場所です。
+> `/bin/` や `/usr/bin/` はOS管理領域のため使用しません。
+> この方法ではシステム全体で `node_check` コマンドとして使えます。
+
+| 方法 | 配置場所 | 実行コマンド | 特徴 |
+|---|---|---|---|
+| ① | `~/` | `~/node_check.sh` | ホームから常に実行可能 |
+| ② | `~/` + alias | `node_check` | 短く呼び出せる・ホームに置いたまま |
+| ③ | `/usr/local/bin/` | `node_check` | システム全体のコマンドとして登録 |
+
+> 💡 **本書では方法②（エイリアス）を採用しています。**
+> スクリプトをホームディレクトリに置いたまま
+> 短いコマンド名で呼び出せる最もバランスの良い方法です。
+
+---
+
 ## Step 6　動作確認
 
 ### 全サービスの稼働確認
