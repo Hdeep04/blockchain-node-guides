@@ -434,6 +434,9 @@ sudo chown $USER:$USER /tmp/slashing_protection.json
 > Tailscale IP（100.x.x.x）が割り当てられていない場合、鍵転送が完了しません。
 
 ```powershell
+# ==============================
+# 【VM側】で実行する
+# ==============================
 # VM → ホストPC（Windows PowerShell）
 scp -P 2222 <user>@127.0.0.1:/tmp/slashing_protection.json .
 scp -P 2222 -r <user>@127.0.0.1:/var/lib/lido-csm/validators/* ./validators/
@@ -465,18 +468,27 @@ scp -P 2222 -r <user>@127.0.0.1:/var/lib/lido-csm/validators/* ./validators/
 ### 方法A：chownで一時変更する方法
 
 ```bash
+# ==============================
+# 【物理PC（ベアメタル）側】で実行する
+# ==============================
 # 【物理PC側】転送先を一時的に $USER 所有に変更
 sudo chown -R $USER:$USER /var/lib/lido-csm/slashing_protection/
 sudo chown -R $USER:$USER /var/lib/lido-csm/validators/
 ```
 
 ```powershell
+# ==============================
+# 【ホストPC（WindowsPowerShell）】で実行する
+# ==============================
 # 【Windows側】ホストPC → 物理PC（Tailscale IP経由）
 scp ./slashing_protection.json <user>@<dest_tailscale_ip>:/var/lib/lido-csm/slashing_protection/
 scp -r ./validators/* <user>@<dest_tailscale_ip>:/var/lib/lido-csm/validators/
 ```
 
 ```bash
+# ==============================
+# 【物理PC（ベアメタル）側】で実行する
+# ==============================
 # 【物理PC側】転送後にethereum所有に戻す（必須）
 sudo chown -R ethereum:ethereum /var/lib/lido-csm/
 sudo chmod -R 700 /var/lib/lido-csm/validators/
@@ -486,18 +498,27 @@ sudo chmod -R 700 /var/lib/lido-csm/slashing_protection/
 ### 方法B：/tmp経由で転送する方法（第1部と同じパターン）
 
 ```bash
+# ==============================
+# 【物理PC（ベアメタル）側】で実行する
+# ==============================
 # 【物理PC側】転送受け取り用の一時ディレクトリを作成
 sudo mkdir -p /tmp/transfer
 sudo chown $USER:$USER /tmp/transfer
 ```
 
 ```powershell
+# ==============================
+# 【ホストPC（WindowsPowerShell）】で実行する
+# ==============================
 # 【Windows側】ホストPC → 物理PC（/tmp経由）
 scp ./slashing_protection.json <user>@<dest_tailscale_ip>:/tmp/transfer/
 scp -r ./validators/* <user>@<dest_tailscale_ip>:/tmp/transfer/
 ```
 
 ```bash
+# ==============================
+# 【物理PC（ベアメタル）側】で実行する
+# ==============================
 # 【物理PC側】/tmp から正式な場所へ移動
 sudo cp -r /tmp/transfer/validators/* /var/lib/lido-csm/validators/
 sudo cp /tmp/transfer/slashing_protection.json \
@@ -515,6 +536,9 @@ sudo rm -rf /tmp/transfer
 ### 転送結果の確認（どちらの方法でも必須）
 
 ```bash
+# ==============================
+# 【物理PC（ベアメタル）側】で実行する
+# ==============================
 ls -ld /var/lib/lido-csm/validators
 ls -ld /var/lib/lido-csm/slashing_protection
 ```
