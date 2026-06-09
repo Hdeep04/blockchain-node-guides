@@ -435,6 +435,15 @@ sudo chown $USER:$USER /tmp/slashing_protection.json
 
 ```powershell
 # ==============================
+# 【ホストPC（Windows PowerShell）】で事前に実行する
+# ==============================
+
+# 転送受け取り用のフォルダを作成
+mkdir validators
+```
+
+```powershell
+# ==============================
 # 【VM側】で実行する
 # ==============================
 # VM → ホストPC（Windows PowerShell）
