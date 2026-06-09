@@ -436,7 +436,7 @@ sudo chown $USER:$USER /tmp/slashing_protection.json
 ```powershell
 # VM → ホストPC（Windows PowerShell）
 scp -P 2222 <user>@127.0.0.1:/tmp/slashing_protection.json .
-scp -P 2222 -r <user>@127.0.0.1:/var/lib/ethereum/lighthouse/validators/* ./validators/
+scp -P 2222 -r <user>@127.0.0.1:/var/lib/lido-csm/validators/* ./validators/
 ```
 
 > 💡 **鍵転送には2つの方法があります。どちらを選んでも結果は同じです。**
