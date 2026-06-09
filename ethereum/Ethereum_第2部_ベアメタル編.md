@@ -481,8 +481,8 @@ sudo chown -R $USER:$USER /var/lib/lido-csm/validators/
 # 【ホストPC（WindowsPowerShell）】で実行する
 # ==============================
 # 【Windows側】ホストPC → 物理PC（Tailscale IP経由）
-scp ./slashing_protection.json <user>@<dest_tailscale_ip>:/var/lib/lido-csm/slashing_protection/
-scp -r ./validators/* <user>@<dest_tailscale_ip>:/var/lib/lido-csm/validators/
+scp ./slashing_protection.json <user>@<dest_tailscale_ip>:~/
+scp -r ./validators <user>@<dest_tailscale_ip>:~/
 ```
 
 ```bash
@@ -511,8 +511,8 @@ sudo chown $USER:$USER /tmp/transfer
 # 【ホストPC（WindowsPowerShell）】で実行する
 # ==============================
 # 【Windows側】ホストPC → 物理PC（/tmp経由）
-scp ./slashing_protection.json <user>@<dest_tailscale_ip>:/tmp/transfer/
-scp -r ./validators/* <user>@<dest_tailscale_ip>:/tmp/transfer/
+scp ./slashing_protection.json <user>@<dest_tailscale_ip>:~/
+scp -r ./validators <user>@<dest_tailscale_ip>:~/
 ```
 
 ```bash
@@ -734,30 +734,44 @@ curl -s http://127.0.0.1:5052/eth/v1/node/syncing | jq
 > Gethの同期完了後に自動的に `false` になります。
 > エラーではありません。
 
-### Step 13　移行データの権限設定
+### Step 13　移行データを正式な場所へ移動・権限設定
 
-> 💡 **Step 3（鍵転送）でchown・chmodは既に実施済みです。**
-> ここでは転送結果が正しいことを確認します。
+> 💡 **Step 3でホームディレクトリ（`~/`）に転送したデータを
+> 正式な場所（`/var/lib/lido-csm/`）へ移動します。**
 
 ```bash
-# 転送結果と権限の確認（必ず目視確認すること）
+# ==============================
+# 【物理PC（ベアメタル）側】で実行する
+# ==============================
+
+# スラッシング保護JSONを正式な場所へ移動
+sudo mv ~/slashing_protection.json /var/lib/lido-csm/slashing_protection/
+
+# バリデータ鍵フォルダを正式な場所へ移動
+sudo mv ~/validators/* /var/lib/lido-csm/validators/
+
+# 所有者をethereumに変更
+sudo chown -R ethereum:ethereum /var/lib/lido-csm/validators
+sudo chown -R ethereum:ethereum /var/lib/lido-csm/slashing_protection
+sudo chmod -R 700 /var/lib/lido-csm/validators
+sudo chmod -R 700 /var/lib/lido-csm/slashing_protection
+```
+
+```bash
+# 移動結果と権限の確認（必ず目視確認すること）
 ls -ld /var/lib/lido-csm/validators
 ls -ld /var/lib/lido-csm/slashing_protection
 ls -la /var/lib/lido-csm/validators/
 ```
 
 期待する出力：
-```
 drwx------ 3 ethereum ethereum 4096 ... /var/lib/lido-csm/validators
 drwx------ 2 ethereum ethereum 4096 ... /var/lib/lido-csm/slashing_protection
-```
 
 > ✅ **確認ポイント：**
 > - 先頭が `drwx------` であること（700パーミッション）
 > - 所有者・グループが `ethereum ethereum` であること
 > - `validators/` の中に `0x` で始まるフォルダが存在すること
->
-> これが確認できれば鍵の転送完了です。
 
 ### Step 14　スラッシング保護データのインポート
 
