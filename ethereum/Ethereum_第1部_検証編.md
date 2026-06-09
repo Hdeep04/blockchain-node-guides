@@ -1124,7 +1124,10 @@ sudo journalctl -u lighthouse-vc -n 20 -o cat
 ```
 
 > ✅ **`active` と表示されれば起動成功です。**
-> しばらく待つと `Successfully published attestations` が出れば署名開始です。
+> 次のステップでLido CSMウィジェットへの登録を行ってください。
+> 署名（attestation）はLidoのデポジット処理が完了し
+> バリデータがアクティブになってから開始されます。
+> Step 6の最終確認で署名ログを確認します。
 
 ### 全サービスの起動状態を一括確認
 
