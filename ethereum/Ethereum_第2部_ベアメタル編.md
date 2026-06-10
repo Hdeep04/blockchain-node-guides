@@ -1028,6 +1028,26 @@ cd ethstaker_deposit-cli-*-linux-amd64
   --folder ./validator_keys_additional
 ```
 
+> 💡 **`--validator_start_index` について：**
+> コマンドに `--validator_start_index` を指定しない場合は
+> 対話形式で以下のように開始インデックスの入力を求められます：
+>
+> ```
+> Enter the index (key number) you wish to start generating more keys from.
+> For example, if you've generated 4 keys in the past, you'd enter 4 here. [0]: 1
+> Please repeat the validator start index to confirm: 1
+> ```
+>
+> | 方法 | コマンド例 | 特徴 |
+> |---|---|---|
+> | コマンドに指定 | `--validator_start_index 1` | 非対話式・自動化向け |
+> | 省略して対話入力 | （省略） | 確認しながら入力できる |
+>
+> どちらの方法でも結果は同じです。
+> 既存の鍵が1個の場合は `1` を入力してください。
+>
+> ⚠️ **`0` を入力すると既存と同じ鍵が生成されます。必ず既存の鍵数と同じ値を入力してください。**
+
 > 💡 **登録後の流れは第1部と同じです。第1部を参照してください。**
 >
 > **複数鍵をまとめて増設する場合：**
