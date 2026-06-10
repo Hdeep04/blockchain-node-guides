@@ -1178,9 +1178,16 @@ sudo journalctl -u lighthouse-vc -n 10 -o cat
 
 > 💡 **ログの読み方：**
 > ```
-> total_validators: 2  ← 2鍵を認識 ✅
-> active_validators: 1 ← 新しい鍵はLido CSM登録後にactiveになる
+> total_validators: 2  ← VCが認識している総鍵数 ✅
+> active_validators: 1 ← 現在署名中の有効な鍵数
+>                        （新しい鍵はLido CSM登録・デポジット処理後にactiveになる）
 > ```
+>
+> `total_validators` はインポートした鍵の総数です。
+> 10鍵に増設した場合は `total_validators: 10` と表示されます。
+> `active_validators` はLido CSMのデポジット処理が完了した鍵数です。
+> 増設直後は新しい鍵がまだ `inactive` のため
+> `active_validators` が `total_validators` より少ない状態は正常です。
 
 ### Step 18　鍵数の確認
 
