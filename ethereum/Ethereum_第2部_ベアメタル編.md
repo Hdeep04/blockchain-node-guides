@@ -989,6 +989,18 @@ sudo journalctl -u lighthouse-vc -n 20 -o cat
 
 ### Step 16　既存ニーモニックから追加鍵を生成
 
+> 💡 **csm-artifactsを削除済みの場合は再ダウンロードが必要です：**
+>
+> ```bash
+> mkdir -p ~/csm-artifacts
+> cd ~/csm-artifacts
+> RELEASE_URL=$(curl -s https://api.github.com/repos/ethstaker/ethstaker-deposit-cli/releases/latest \
+>   | jq -r '.assets[] | select(.name | contains("linux-amd64") and (contains("sha256")|not)) | .browser_download_url')
+> wget $RELEASE_URL
+> tar -xvf ethstaker_deposit-cli-*-linux-amd64.tar.gz
+> cd ethstaker_deposit-cli-*-linux-amd64
+> ```
+
 > 📎 **公式リリースページ：** [ethstaker-deposit-cli releases](https://github.com/ethstaker/ethstaker-deposit-cli/releases)
 
 ```bash
@@ -1015,6 +1027,20 @@ cd ethstaker_deposit-cli-*-linux-amd64
   --eth1_withdrawal_address 0x4473dCDDbf77679A643BdB654dbd86D67F8d32f2 \
   --folder ./validator_keys_additional
 ```
+
+> 💡 **new-mnemonic と existing-mnemonic の違い：**
+>
+> | 項目 | new-mnemonic（第1部） | existing-mnemonic（第2部） |
+> |---|---|---|
+> | ニーモニック | 新規生成・書き写しが必要 | 既存の24単語を入力するだけ |
+> | 開始インデックス | 不要（0から自動） | 必要（既存の鍵数を入力） |
+> | 用途 | 初回の鍵生成 | 鍵の増設時 |
+
+対話フローへの回答（existing-mnemonic 固有のプロンプト）：
+
+| プロンプト | 入力 | 補足 |
+|---|---|---|
+| `Enter the index you wish to start generating from` | 既存の鍵数（例：1） | 確認のため2回入力。0を入力すると既存と同じ鍵が生成される |
 
 > | ネットワーク | Withdrawal Vault アドレス（proxy）|
 > |---|---|
@@ -1080,12 +1106,18 @@ cd ethstaker_deposit-cli-*-linux-amd64
 > ```
 
 ```bash
+# lighthouse-vcを停止してからインポートする（起動中だとdatabase is lockedエラーになる）
+sudo systemctl stop lighthouse-vc
+```
+
+> ⚠️ **lighthouse-vcが起動中の場合 `database is locked` エラーになります。**
+> インポート前に必ず停止してください（実証済み）。
+
+```bash
 # なぜ /tmp 経由か：
 # インポートコマンドは ethereum ユーザーとして実行するが、
 # /home/<your_user>/ は他ユーザーが通過できない（パーミッション 700 の壁）。
 # /tmp は誰でもアクセスできる「中立地帯」なので、権限問題を安全に回避できる。
-
-sudo systemctl stop lighthouse-vc
 
 sudo mkdir -p /tmp/keys_import
 sudo cp -r ./validator_keys_additional/validator_keys /tmp/keys_import
@@ -1097,10 +1129,23 @@ sudo -u ethereum /usr/local/bin/lighthouse account validator import \
   --directory /tmp/keys_import \
   --reuse-password
 
-# 一時ファイルを削除してVCを再起動
+# 一時ファイルを削除する
 sudo rm -rf /tmp/keys_import
-sudo systemctl start lighthouse-vc
 ```
+
+```bash
+# lighthouse-vcを再起動する
+sudo systemctl start lighthouse-vc
+
+# 2鍵が認識されているか確認
+sudo journalctl -u lighthouse-vc -n 10 -o cat
+```
+
+> 💡 **ログの読み方：**
+> ```
+> total_validators: 2  ← 2鍵を認識 ✅
+> active_validators: 1 ← 新しい鍵はLido CSM登録後にactiveになる
+> ```
 
 ### Step 18　鍵数の確認
 
