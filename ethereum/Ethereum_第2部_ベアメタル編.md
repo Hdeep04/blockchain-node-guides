@@ -1028,6 +1028,22 @@ cd ethstaker_deposit-cli-*-linux-amd64
   --folder ./validator_keys_additional
 ```
 
+> 💡 **登録後の流れは第1部と同じです。第1部を参照してください。**
+>
+> **複数鍵をまとめて増設する場合：**
+> `--num_validators` の値を変更するだけで
+> 複数の鍵をまとめて生成・登録できます。
+>
+> ```bash
+> # 例：一度に9鍵追加する場合（合計10鍵にする場合）
+> ./deposit existing-mnemonic \
+>   --num_validators 9 \
+>   --chain hoodi \
+>   --eth1_withdrawal_address 0x4473dCDDbf77679A643BdB654dbd86D67F8d32f2
+> ```
+>
+> 鍵の生成・インポート・登録の手順は1個の場合と全く同じです。
+
 > 💡 **new-mnemonic と existing-mnemonic の違い：**
 >
 > | 項目 | new-mnemonic（第1部） | existing-mnemonic（第2部） |
@@ -1160,23 +1176,13 @@ sudo ls -l /var/lib/lido-csm/validators/ | grep 'drwx.*0x' | wc -l
 # → 10 と表示されれば成功
 ```
 
-> 💡 **登録後の流れは第1部と同じです。第1部を参照してください。**
->
-> **複数鍵をまとめて増設する場合：**
-> `--num_validators` の値を変更するだけで
-> 複数の鍵をまとめて生成・登録できます。
->
-> ```bash
-> # 例：一度に9鍵追加する場合（合計10鍵にする場合）
-> ./deposit existing-mnemonic \
->   --num_validators 9 \
->   --chain hoodi \
->   --eth1_withdrawal_address 0x4473dCDDbf77679A643BdB654dbd86D67F8d32f2
-> ```
->
-> 鍵の生成・インポート・登録の手順は1個の場合と全く同じです。
-
 > ⚠️ **相関ペナルティについて：** 1台のPCに鍵を詰め込みすぎると、そのPCが故障したとき全鍵が同時にオフラインになり「相関ペナルティ」が重くなります。1台運用なら最大10〜20鍵程度が個人のリスク分散として賢明なラインです（本書で10鍵に留めた理由）。
+
+### Step 19　Lido CSMウィジェットへの追加登録
+
+> 💡 **登録の手順は第1部と同じです。第1部を参照してください。**
+> deposit_data-*.json の中身を
+> `[` と `]` を含めてそのまま貼り付けてください。
 
 ---
 
@@ -1227,7 +1233,7 @@ MEV-Boost あり：
 
 ---
 
-### Step 19　MEV-Boostのインストール
+### Step 20　MEV-Boostのインストール
 
 ```bash
 cd ~
@@ -1290,7 +1296,7 @@ sudo journalctl -u mev-boost -f -o cat
 > ✅ `active` と表示されれば起動成功です。
 > `POST /eth/v1/builder/validators 200` が出ればリレーへの登録成功です。
 
-### Step 20　Lighthouse BN/VC にMEV-Boost連携を追加
+### Step 21　Lighthouse BN/VC にMEV-Boost連携を追加
 
 Step 12のlighthouse.serviceには既に `--builder http://127.0.0.1:18550` が含まれています。MEV-Boostを起動すればBNが自動的に接続します。
 
@@ -1453,7 +1459,7 @@ Prometheusが各クライアントからメトリクスを収集し、Grafanaが
 └──────────────────────────────────────────────────────────────┘
 ```
 
-### Step 21　Node Exporter のインストール
+### Step 22　Node Exporter のインストール
 
 ```bash
 # OS/ハードウェアのメトリクスを9100番ポートで公開
@@ -1461,7 +1467,7 @@ sudo apt install -y prometheus-node-exporter
 sudo systemctl enable --now prometheus-node-exporter
 ```
 
-### Step 22　Prometheus のインストールと設定
+### Step 23　Prometheus のインストールと設定
 
 ```bash
 sudo apt install -y prometheus
@@ -1497,7 +1503,7 @@ EOF
 sudo systemctl restart prometheus && sudo systemctl enable prometheus
 ```
 
-### Step 23　Grafana のインストール
+### Step 24　Grafana のインストール
 
 ```bash
 sudo apt-get install -y apt-transport-https software-properties-common wget
@@ -1515,7 +1521,7 @@ sudo ufw allow in on tailscale0 to any port 3000 proto tcp
 
 > ⚠️ **初期ログインは `admin / admin` です。ログイン後すぐに強力なパスワードへ変更してください。**
 
-### Step 24　自作ダッシュボードの構築
+### Step 25　自作ダッシュボードの構築
 
 既製のダッシュボードID（1860・13351）はメトリクスの構成が合わない場合があるため、以下のPromQLで自作しました。
 
@@ -1582,7 +1588,7 @@ builder_validator_registrations_total{status="success"}
 
 `node_check.sh` を一般ユーザーで実行した際、いくつかのコマンドが `sudo` を要求して止まってしまいました。セキュリティを維持しつつ `sudo` 不要で動かすために、以下の2つの工夫を施しました。
 
-### Step 25　ACLによるディレクトリ権限の付与
+### Step 26　ACLによるディレクトリ権限の付与
 
 バリデータ鍵のディレクトリ（`/var/lib/lido-csm/validators/`）は `ethereum` ユーザーが所有しており、一般ユーザーは `ls` すら実行できません。`setfacl` でピンポイントに読み取り・通過権限を付与します。
 
@@ -1598,7 +1604,7 @@ getfacl /var/lib/lido-csm/validators/
 
 > 💡 **`chmod 777` との違い：** `chmod` は「全員に権限を与える」のに対し、`setfacl` は「特定のユーザーにだけ」ピンポイントに付与できます。ethereum ユーザーの厳格な保護を維持したまま、監視スクリプトだけが参照できる状態を実現しています。
 
-### Step 26　visudo による NOPASSWD 設定
+### Step 27　visudo による NOPASSWD 設定
 
 `fail2ban-client status` と `systemctl stop` は root 権限が必要です。スクリプト実行時にパスワードプロンプトが出ないよう、visudo で特定コマンドのみ NOPASSWD を設定します。
 
@@ -1619,7 +1625,7 @@ sudo visudo -f /etc/sudoers.d/node-ops
 
 > ⚠️ **`NOPASSWD: ALL` は絶対に設定しないでください。** コマンドを1行ずつ列挙することで、万が一の不正侵入時の被害を最小限に抑えます。
 
-### Step 27　node_check.sh の作成
+### Step 28　node_check.sh の作成
 
 > 💡 **viエディタの操作は第1部を参照してください。**（下記スクリプトを貼り付けて `:wq` で保存）
 
@@ -1972,7 +1978,7 @@ sudo systemctl reboot
 
 ---
 
-### Step 28　node_safe_stop.sh の作成
+### Step 29　node_safe_stop.sh の作成
 
 > 💡 **viエディタの操作は第1部を参照してください。**（下記スクリプトを貼り付けて `:wq` で保存）
 
@@ -2033,7 +2039,7 @@ fi
 
 ---
 
-### Step 29　node_backup.sh の作成
+### Step 30　node_backup.sh の作成
 
 > 💡 **viエディタの操作は第1部を参照してください。**（下記スクリプトを貼り付けて `:wq` で保存）
 
@@ -2080,7 +2086,7 @@ echo "Backup completed: $BACKUP_FILE"
 echo "Backup size: $(du -sh $BACKUP_FILE | cut -f1)"
 ```
 
-### Step 30　cron による自動バックアップの設定
+### Step 31　cron による自動バックアップの設定
 
 ```bash
 # cron = 定期的にコマンドを自動実行するLinuxのスケジューラー
@@ -2109,7 +2115,7 @@ crontab -e
 crontab -l
 ```
 
-### Step 31　バックアップファイルのホストPCへの自動転送
+### Step 32　バックアップファイルのホストPCへの自動転送
 
 物理PCのバックアップをサーバー内だけに置くのは危険です。
 SSD故障時にバックアップごと失うリスクがあります。
