@@ -1010,7 +1010,7 @@ cd ~/csm-artifacts
 
 # 最新バージョンのダウンロードURLを自動取得
 RELEASE_URL=$(curl -s https://api.github.com/repos/ethstaker/ethstaker-deposit-cli/releases/latest \
-  | jq -r '.assets[] | select(.name | contains("linux-amd64")) | .browser_download_url')
+  | jq -r '.assets[] | select(.name | contains("linux-amd64") and (contains("sha256")|not)) | .browser_download_url')
 wget $RELEASE_URL -O ethstaker_deposit-cli-linux-amd64.tar.gz
 
 # 解凍（ファイル名が変わっても動作する）
@@ -1164,6 +1164,18 @@ sudo systemctl stop lighthouse-vc
 > ⚠️ **lighthouse-vcが起動中の場合 `database is locked` エラーになります。**
 > インポート前に必ず停止してください（実証済み）。
 
+> 💡 **鍵ファイルの場所について：**
+> `--folder ./validator_keys_additional` を指定した場合：
+> `~/csm-artifacts/ethstaker_deposit-cli-*/validator_keys_additional/validator_keys/`
+>
+> `--folder` を指定しなかった場合：
+> `~/csm-artifacts/ethstaker_deposit-cli-*/validator_keys/`
+>
+> ご自身の環境に合わせてパスを確認してください：
+> ```bash
+> ls ~/csm-artifacts/ethstaker_deposit-cli-*-linux-amd64/
+> ```
+
 ```bash
 # なぜ /tmp 経由か：
 # インポートコマンドは ethereum ユーザーとして実行するが、
@@ -1171,7 +1183,7 @@ sudo systemctl stop lighthouse-vc
 # /tmp は誰でもアクセスできる「中立地帯」なので、権限問題を安全に回避できる。
 
 sudo mkdir -p /tmp/keys_import
-sudo cp -r ./validator_keys_additional/validator_keys /tmp/keys_import
+sudo cp -r ~/csm-artifacts/ethstaker_deposit-cli-*-linux-amd64/validator_keys_additional/validator_keys /tmp/keys_import
 sudo chown -R ethereum:ethereum /tmp/keys_import
 
 sudo -u ethereum /usr/local/bin/lighthouse account validator import \
