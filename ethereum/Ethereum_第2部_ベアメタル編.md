@@ -1028,6 +1028,29 @@ cd ethstaker_deposit-cli-*-linux-amd64
   --folder ./validator_keys_additional
 ```
 
+> 💡 **deposit_data-*.json の管理について：**
+>
+> 増設のたびに新しい `deposit_data-*.json` が生成されます。
+> ファイル名のタイムスタンプ（数字）が新しいものが
+> 今回生成した鍵のdeposit_dataです。
+>
+> ```bash
+> # 生成されたファイルを確認する
+> ls -la ~/csm-artifacts/ethstaker_deposit-cli-*-linux-amd64/validator_keys/
+> ```
+>
+> | タイミング | deposit_data-*.json |
+> |---|---|
+> | Lido CSM登録前 | 削除しないこと（登録に必要） |
+> | Lido CSMで登録完了・Active確認後 | 削除してOK |
+>
+> ⚠️ **複数のdeposit_dataがある場合は必ず新しく生成したファイルを使用してください。**
+> 誤って別の鍵のdeposit_dataを登録すると
+> インポートしていない鍵が登録され
+> 署名できずMissed attestationが発生します。
+>
+> > 💡 **削除してしまった場合はニーモニックから再生成できます。**
+
 > 💡 **`--validator_start_index` について：**
 > コマンドに `--validator_start_index` を指定しない場合は
 > 対話形式で以下のように開始インデックスの入力を求められます：
