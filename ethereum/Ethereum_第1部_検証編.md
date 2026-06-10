@@ -1642,6 +1642,8 @@ node_check
 | ② | `~/` + alias | `node_check` | 短く呼び出せる・ホームに置いたまま |
 | ③ | `/usr/local/bin/` | `node_check` | システム全体のコマンドとして登録 |
 
+> 💡 **第2部では方法②（エイリアス）を採用しています。**
+
 ---
 
 ## 参考：lighthouse バイナリについて
@@ -1672,5 +1674,3 @@ file /usr/local/bin/lighthouse
 > `lighthouse bn` と `lighthouse vc` は
 > systemdサービスとして常時起動しますが
 > `lighthouse account ...` は必要な時だけ手動で実行します。
-
-> 💡 **第2部では方法②（エイリアス）を採用しています。**
