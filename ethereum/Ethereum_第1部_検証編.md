@@ -1237,8 +1237,21 @@ sudo systemctl status geth lighthouse lighthouse-vc
 ### 署名ログの確認
 
 ```bash
-sudo journalctl -u lighthouse-vc -n 20 -o cat | grep attestation
+# 直近100行からattestation（署名）ログを検索する
+# -n 100 : 直近100行を対象にする（20行では署名タイミングによっては出ない）
+# grep "attestations" : 複数形で検索する（"attestation"では一致しない）
+sudo journalctl -u lighthouse-vc -n 100 -o cat | grep "attestations"
 ```
+
+> 💡 **なぜ `-n 20` では不十分か**
+> アテステーション（署名）は約6.4分に1回発生します。
+> `-n 20` では直近20行しか見ないため、
+> 署名タイミングによっては結果が出ない場合があります。
+> `-n 100` で余裕を持って確認してください。
+>
+> また `grep attestation` では `attestations`（複数形）に一致しません。
+> 必ず `grep "attestations"` と複数形で検索してください。
+> これは実際に手順書通りに試して発見した修正点です。
 
 | ログメッセージ | 意味 | 対処 |
 |---|---|---|
