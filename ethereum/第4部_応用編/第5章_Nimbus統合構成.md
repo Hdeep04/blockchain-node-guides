@@ -772,7 +772,182 @@ nodeOperatorId: <your_node_operator_id>
 
 ---
 
-## 9. 確認コマンド一覧（読者自身が再現する用）
+## 9. 【実録】Active化〜アテステーション成功確認
+
+deposit登録（New keys uploaded）から約半日後に「Keys were deposited」通知を受信し、その後Active化を待ちました。
+
+**CSM Sentinel通知の流れ：**
+
+```
+👀 New keys uploaded（登録当日朝）
+    ↓ 約半日
+🤩 Keys were deposited
+Deposited keys count: 4 -> 5
+    ↓ 約1日
+Active（Lido CSMダッシュボードで確認）
+```
+
+> 💡 **第3章実測（登録から約2日でActive）と比較すると、今回はやや早めでした。**
+> Active化までの時間はテストネットの混雑状況に依存するため、目安として参考にしてください。
+
+### Active化の確認
+
+Lido CSMダッシュボード（`csm.testnet.fi`）の Keys 画面で確認：
+
+```
+0x879709...efc5a789 → Active ✅
+```
+
+### アテステーション成功ログ
+
+```bash
+sudo journalctl -u nimbus --since "23:08:00" --until "23:09:30" --no-pager | grep -i "attestation"
+```
+
+**実測ログ（1回目の署名）：**
+```
+NTC Slot end ... nextAttestationSlot=3300891
+NTC Attestation sent  topics="message_router"
+  attestation="(committee_index: 40, attester_index: 1424491,
+  data: (slot: 3300891, ...), signature: 8729c500)"
+  delay=-476ms912us848ns subnet_id=40
+NTC Slot end ... nextAttestationSlot=3300919
+```
+
+> 💡 **ログの文言が第3章と異なります。**
+> 第3章（分離構成・`nimbus-vc`サービス）では `Attestation published`、
+> 本章（統合構成・`nimbus`サービスの`message_router`トピック）では
+> `Attestation sent` という表記でした。同じ「署名成功」を意味しますが、
+> サービス構成によってログの出どころ・文言が変わる点は、ログを読む際の
+> 注意点として記録しておきます。
+
+**2回目の署名（次のエポックでも継続成功）：**
+```bash
+sudo journalctl -u nimbus -n 30 --no-pager | grep -i "attestation sent"
+```
+```
+NTC Attestation sent
+  attestation="(... data: (slot: 3300919, ...), signature: b49f6a8b)"
+  delay=1s156ms308us89ns subnet_id=58
+```
+
+> ✅ **`attester_index: 1424491`（鍵index 4のバリデータインデックス）が、
+> 連続するエポックでアテステーションに成功していることを確認しました。**
+> これで第5章の検証は完了です。
+
+### 【実録】Active化直後の一時的な警告
+
+Active化直後のログには、以下の警告も一度だけ見られました。
+
+```
+NTC Previous epoch attestation missing
+topics="chaindag" epoch=103151 validator=87970927
+```
+
+> 💡 **Active化してから最初のエポックでは、まだ署名履歴が無いため
+> 一時的にこの警告が出ることがあります。** 直後のエポック以降は
+> 正常にアテステーションが送信され続けたため、問題ありませんでした。
+
+---
+
+## 10. 【参考値】testnetcsm vs testnetcsm2 リソース・署名遅延の実測比較
+
+両VM・両鍵が同時に稼働している状態で、参考値として比較データを記録します。
+
+> ⚠️ **この比較は厳密な優劣判定ではありません。**
+> 以下の理由から、構成（分離 vs 統合）そのものの性能差を示すものではなく、
+> あくまで参考値として捉えてください。
+> - **稼働期間が異なる**：testnetcsm（鍵index 3）は数週間の安定稼働後、
+>   testnetcsm2（鍵index 4）はActive化からまだ数時間
+> - **1回のスナップショット測定**：時系列の平均ではなく、ある瞬間の値
+> - **VM環境**：ホストPC上で2台が同時稼働しており、相互のリソース競合の
+>   影響を受ける
+> - **異なるバリデータ**：committee割り当てやピアの構成も完全には同一でない
+
+### リソース比較（測定コマンド）
+
+```bash
+echo "=== Resource ===" && free -h && echo "" && top -bn1 | head -12 && echo "" && echo "=== Disk ===" && df -h /
+```
+
+| 項目 | testnetcsm（分離構成） | testnetcsm2（統合構成） |
+|---|---|---|
+| Nimbus CPU | 90.5% | 133.3% |
+| Nimbus メモリ（RES） | 3.2GB | 3.1GB |
+| Nethermind CPU | 28.6% | 41.7% |
+| Nethermind メモリ | 1.5GB | 1.4GB |
+| 全体使用メモリ | 5.0GB | 4.7GB |
+| load average | 0.73 | 0.77 |
+| ディスク使用 | 113GB | 118GB |
+
+### 署名遅延（delay）比較
+
+```bash
+# testnetcsm（分離構成）
+sudo journalctl -u nimbus-vc --no-pager | grep "Attestation published" | tail -5
+
+# testnetcsm2（統合構成）
+sudo journalctl -u nimbus --no-pager | grep "Attestation sent" | tail -5
+```
+
+| | testnetcsm（分離構成） | testnetcsm2（統合構成） |
+|---|---|---|
+| delay 1 | -67ms | -161ms |
+| delay 2 | 363ms | 306ms |
+| delay 3 | -196ms | **-3805ms** |
+| delay 4 | 45ms | -476ms |
+| delay 5 | 46ms | 1156ms |
+
+> 💡 **testnetcsm2の `-3805ms` という大きな値について：**
+> マイナスのdelayは「予定時刻より早く送信した」ことを意味しますが、
+> 3.8秒も早いのは明らかな異常値です。記録した時刻（22:57:36）は
+> Active化から1時間も経っていないタイミングであり、**統合構成自体の
+> 問題ではなく、稼働初期特有の一時的な不安定さ**と考えられます。
+
+### ホストPC側のリソース（参考）
+
+```powershell
+Get-Counter '\Processor(_Total)\% Processor Time', '\Memory\Available MBytes'
+Get-Process | Where-Object {$_.ProcessName -like "*VirtualBox*"} | Select-Object ProcessName, Id, @{Name="Memory(MB)";Expression={[math]::Round($_.WorkingSet64/1MB,1)}}, CPU
+```
+
+```
+ホストPC CPU使用率：29.1%
+ホストPC Available Memory：5138MB（約5GB）
+
+VirtualBox VMプロセス別メモリ：
+  testnetcsm相当：約6.7GB
+  testnetcsm2相当：約5.7GB
+  累積CPU時間：両VMともほぼ同等（約12.9時間）
+```
+
+> ✅ **12GB×2（24GB）設定にした効果が確認できました。**
+> 両VM同時稼働中でもホストPC側に約5GBの余裕が残っており、
+> 第5章前半で発生したフリーズのような状況は再発していません。
+
+### 結論：今回の比較データから言えること
+
+```
+✅ 確認できたこと：
+  両構成とも正常にアテステーションを継続できている
+  ホストPCのメモリ配分（12GB×2）が安定稼働の土台になっている
+
+❌ 判断できないこと：
+  リソース効率・署名精度の構成間の優劣
+  （公平な比較には、稼働期間を揃えた長期データが必要）
+```
+
+> 💡 **構築・運用面の「手間の差」（セクション12参照）は明確に統合構成が
+> 優れていましたが、稼働中の性能面の優劣については、今回のデータでは
+> 結論を出さないことが誠実な姿勢だと考えます。** 興味のある読者は、
+> 本書のコマンドを参考に、ご自身の環境で稼働期間を揃えた比較を
+> 試してみてください。
+
+---
+
+## 11. 確認コマンド一覧（読者自身が再現する用）
+
+
 
 本章の状態を再現・確認するための主要コマンドをまとめます。
 
@@ -801,25 +976,7 @@ journalctl -b -1 --no-pager | grep -i "oom\|killed"
 
 ---
 
-## 10. リソース比較（第3章 vs 第5章）
-
-> 参考実測値（Hoodi Testnet / VM環境 / Ubuntu 22.04）
-
-| 項目 | 第3章（分離構成・稼働2日後） | 第5章（統合構成・稼働9時間後） |
-|---|---|---|
-| Nethermind CPU | 46.3% | **23.5%** |
-| メモリ使用（全体） | 4.8GB | 4.5GB |
-| Swap | 449MB | 362MB |
-| ディスク使用 | 111GB | 119GB |
-| ピア数（Nimbus） | 7〜9 | 10〜11 |
-
-> 💡 **大きなリソース差は見られませんでした。**
-> リソース効率の観点では分離構成・統合構成に明確な優劣はなく、
-> 差が出たのは「構築・運用の手間」と「トラブルの起きやすさ」でした。
-
----
-
-## 11. まとめ：分離構成 vs 統合構成
+## 12. まとめ：分離構成 vs 統合構成
 
 | 観点 | 第3章（分離構成） | 第5章（統合構成） |
 |---|---|---|
