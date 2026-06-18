@@ -459,6 +459,117 @@ curl -s http://127.0.0.1:5052/eth/v1/node/syncing | jq
 
 > 💡 **教訓：複数VMを同時に長時間稼働させる検証では、ホストPCのリソースに余裕を持たせることが重要です。** 同期のような重い処理を行う際は、不要なVMを一時停止する判断も有効です。
 
+### 【実録】後日判明した根本原因：VM割り当てメモリがホスト物理メモリと同値だった
+
+上記の対応で同期は完了しましたが、後日改めてホストPC側のリソースを調査したところ、より根本的な原因が判明しました。
+
+**ホストPCの総メモリを確認：**
+
+```powershell
+Get-CimInstance Win32_ComputerSystem | Select-Object TotalPhysicalMemory
+```
+
+```
+TotalPhysicalMemory
+-------------------
+        34089136128
+```
+
+`34089136128 ÷ 1024³ ≈ 31.75GB`。**ホストPCの総メモリは約32GBでした。**
+
+**両VMのメモリ割り当て設定を確認：**
+
+```powershell
+& "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" showvminfo "lide_csm_testnet3" | findstr "Memory"
+& "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" showvminfo "lide_csm_testnet4" | findstr "Memory"
+```
+
+```
+Memory size:                 16384MB
+Memory size:                 16384MB
+```
+
+> ⚠️ **判明した根本原因：**
+> ```
+> ホストPC総メモリ：約32GB
+> = testnetcsm（16GB）+ testnetcsm2（16GB）+ ホストOS用（0GB）
+> ```
+> **2台のVMへの割り当て合計が、ホストPCの物理メモリ総量と完全に同値でした。** ホストOS自体やブラウザ等の常駐プロセスが使う余地がほぼゼロの設定になっていたことが、繰り返しフリーズの根本原因だったと考えられます。
+> 実際にこの時点でのホストPC側の空きメモリは `Get-Counter '\Memory\Available MBytes'` で確認すると **2304MB（約2.3GB）** しかありませんでした。
+
+### 対策：VM割り当てメモリを12GB×2に変更
+
+ホストOS用に8GB程度の余裕を持たせる方針で、両VMを16GB→12GBに変更しました。
+
+**両VMを安全に停止（OSアップデートも兼ねる）：**
+
+```bash
+sudo apt update && sudo apt upgrade -y
+sudo systemctl stop nimbus       # testnetcsm2は nimbus のみ
+sudo systemctl stop nimbus-vc    # testnetcsmのみ追加で停止
+sudo systemctl stop nethermind
+sudo systemctl poweroff
+```
+
+**メモリ設定の変更（VBoxManageコマンド・GUI操作不要）：**
+
+```powershell
+& "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" modifyvm "lide_csm_testnet3" --memory 12288
+& "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" modifyvm "lide_csm_testnet4" --memory 12288
+```
+
+> 💡 **VirtualBoxマネージャーのGUIで1台ずつ「設定」を開く必要はありません。**
+> `VBoxManage modifyvm` コマンドなら2台分の変更が一瞬で完了します。
+> （`VBoxManage` が見つからない場合は `C:\Program Files\Oracle\VirtualBox\VBoxManage.exe` のフルパスで実行してください。）
+
+**変更後の確認：**
+
+```
+Memory size:                 12288MB
+Memory size:                 12288MB
+```
+
+GUI（VirtualBoxマネージャー）の詳細画面でも、メインメモリーが正しく12288MBに変わっていることを確認しました。
+
+### 変更後の起動・安定性確認
+
+両VMを起動し、再同期を確認しました。
+
+```bash
+echo "=== Host ===" && hostname && echo "" && echo "=== Memory ===" && free -h && echo "" && echo "=== Sync ===" && curl -s http://127.0.0.1:5052/eth/v1/node/syncing | jq && echo "" && echo "=== Validator Duties ===" && sudo journalctl -u nimbus -n 3 --no-pager | grep "Slot start"
+```
+
+**起動直後（再起動の影響で一時的にズレあり）：**
+```
+testnetcsm2： sync_distance: "24"、is_optimistic: true
+testnetcsm ： sync_distance: "27"、sync="almost synced"
+```
+
+**60秒後（自動的に解消）：**
+```bash
+sleep 60 && curl -s http://127.0.0.1:5052/eth/v1/node/syncing | jq
+```
+```
+両VMとも sync_distance: "0"、is_optimistic: false ✅
+```
+
+**ホストPC側メモリの改善：**
+
+```powershell
+Get-Counter '\Processor(_Total)\% Processor Time', '\Memory\Available MBytes'
+```
+
+| 項目 | 変更前（16GB×2） | 変更後（12GB×2） |
+|---|---|---|
+| ホストPC Available Memory | 2304MB | **6109MB** |
+
+Windowsタスクマネージャーで内訳を確認すると、VirtualBox VM 2台で実際に使用していたのは約7.8GBずつ（設定上限の12GBまでは使っていない）、Google Chromeも約3GB使用していました。
+
+> 💡 **発見：VMは設定した最大値を常に使い切るわけではありません。**
+> 16GB設定時点でも通常時の実使用量はもっと少なかったはずですが、Nethermind/Nimbusの同期処理がスパイク的に高いメモリを要求する瞬間があり、その瞬間にホストOS側の余裕がゼロだったことが、繰り返しフリーズを引き起こしていたと考えられます。
+>
+> **教訓：VMのメモリ割り当ては「平常時の使用量」ではなく「ホストPCの物理メモリに対する余裕」で決めるべきです。** 目安として、ホストOS用に物理メモリの2割程度（今回は32GBに対し8GB）を残すと安定しました。
+
 ---
 
 ## 6. Phase 4：新規鍵の生成（index 4）
