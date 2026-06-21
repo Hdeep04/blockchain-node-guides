@@ -443,6 +443,90 @@ disabled
 
 ---
 
-> 💡 **第4部・第5章へ続く（執筆予定）**
-> 次章ではNimbus統合構成（in-process validator・公式推奨構成）を
-> testnetcsmで構築し、第3章の分離構成と比較検証します。
+## 8. 【後日談】退出後、資金はいつ・どう戻ってくるのか
+
+Voluntary Exitを実行してバリデータが`Exited`状態になった後、読者が一番気になるのは
+「資金はいつ・どうやって戻ってくるのか」だと思います。本検証では実際に
+資金が完全に戻ってくるまでの全過程を観察できたので、後日談として記録します。
+
+### 8-1. CSM Sentinelからの確定通知
+
+退出処理が完了し、残高が引き出されたタイミングで、CSM Sentinel（Telegram通知）
+から以下の通知が届きました。
+
+```
+👀 Validator withdrawal confirmed
+Withdrawn key: 0xb6b94fc...
+Exit balance: 32 ether
+nodeOperatorId: <your_node_operator_id>
+[Transaction] <etherscanのトランザクションリンク>
+```
+
+> 💡 **「Exit balance: 32 ether」がそのまま戻ってきた点に注目。** スラッシング
+> （第2章）では残高が削減されましたが、Voluntary Exitでは正規の手順を踏んだ
+> ため、ペナルティなしで全額（32 ETH）がそのまま確定しています。
+
+### 8-2. 実測タイムライン（beaconcha.in）
+
+beaconcha.inの該当バリデータ（`0xb6b94fc...`、index 1422277）ページでは、
+退出から引き出しまでの一連のステータス遷移と、それぞれの確定日時が
+確認できます。
+
+```
+Exited since   : epoch 102664（2026年6月17日 3:59）
+Withdrawable   : 2026年6月18日 7:18
+Status（最終） : Withdrawn
+Balance（最終） : 0.00000 ETH（バリデータからは全額引き出し済み）
+```
+
+> ✅ **Exit確定（Exited）から、実際に引き出し可能（Withdrawable）になるまで、
+> 約27時間19分でした。** 「Exitボタンを押したら、即座に資金が戻ってくる」
+> わけではなく、ネットワーク側の処理キューを経て、おおよそ1日強の時間が
+> かかる、という実測値です。
+>
+> この待機時間は、本章2節で解説した「eligible on epoch」の仕組みに
+> よるものです。退出申請がネットワークに承認されるための待ち行列があり、
+> その時点のネットワーク全体の混雑状況によって変動します。
+
+### 8-3. Lido CSMボンドのclaim（追加担保の返却）
+
+Voluntary Exitで返ってくるのは「バリデータ本体の32 ETH」だけではありません。
+Lido CSMでバリデータを運用する際に預けていた「ボンド（追加担保）」のうち、
+不要になった超過分（Excess Bond）も、別途claim（請求）する必要があります。
+
+```
+操作場所：csm.testnet.fi/bond/claim
+Excess Bond：1.3008 ETH
+Claim方法：「All」を選択 →「Rewards Address」へ →「stETH」で受け取り
+実行日：2026年6月19日夜
+```
+
+> ⚠️ **ボンドのclaimは自動では行われません。** バリデータ本体の32 ETHは
+> 退出処理だけで戻ってきますが、ボンドの超過分は別途、CSM UI上で
+> 自分で「claim」操作をしないと、Lido CSM側に預けたままの状態になります。
+> Voluntary Exitを実施した後は、ボンド残高も忘れずに確認しましょう。
+
+### 8-4. まとめ：引退から資金回収までの全体フロー
+
+```
+① lighthouse account validator exit を実行
+        ↓（約13時間・eligible epochの待機）
+② ネットワークがExitを承認・active_exiting に遷移
+        ↓
+③ Exited に確定（このタイミングでCSM Sentinelから通知が来る）
+        ↓（約27時間19分・Withdrawableになるまでの待機）
+④ Withdrawable → 自動的にWithdrawn（32 ETH全額がそのまま回収される）
+        ↓
+⑤ 【別途・手動操作】csm.testnet.fi/bond/claim で
+   Excess Bond（超過担保分）をclaimして回収する
+```
+
+> 💡 **③〜④はネットワークが自動的に処理しますが、⑤は自分で操作が必要な
+> 点を忘れないようにしましょう。** 「バリデータの32 ETHは戻ってきたのに、
+> ボンド分だけLido CSM側に残ったままになっていた」という見落としを
+> 防ぐためのチェックリストとして活用してください。
+
+---
+
+> 💡 **本書は第4部・第5章（Nimbus統合構成）、第6章（SSV DVTクラスター実践検証）
+> へと続きます。**
