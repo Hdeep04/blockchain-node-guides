@@ -730,6 +730,279 @@ SSV：
 
 ---
 
+## 15. 運用Tips：死活監視・安全停止スクリプトの拡張
+
+クラスターが実際に継続稼働を始めると、第2部で作成した自作スクリプト
+（`node_check.sh`・`node_safe_stop.sh`）にも見直しが必要になりました。
+「SSVノードが起動しているか」だけでなく「実際に署名タスクを完遂できているか」
+「安全な順序で停止できるか」まで踏み込んで拡張し、実機での停止・OS更新・
+再起動まで含めて検証した記録です。
+
+### 15-1. node_check.sh：閾値署名の成功状況とCL接続先の可視化
+
+第3部で追加した`[12] SSV Node (DVT) Status`セクションは、コンテナの
+稼働状態・P2Pピア数・同期スロットまでは確認できますが、**「動いている」
+ことと「4人クラスターの一員として署名タスクを完遂できているか」は
+別の話**です。以下の2点を追加しました。
+
+**① CL接続先の表示（片肺運転の可視化）**
+
+```bash
+# CL接続先の表示（片肺運転の可視化）
+# 【Why】SSVノードのCL（Beacon）接続は外部RPC（Alchemy等）に依存する
+# ハイブリッド構成のため、無料枠の枯渇や接続障害に気づけるよう
+# 「今どこに繋がっているか」を毎回明示する。
+SSV_BEACON_ADDR=$(docker inspect ssv-node --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep '^BEACON_NODE_ADDR=' | cut -d'=' -f2-)
+if [ -n "$SSV_BEACON_ADDR" ]; then
+    if [[ "$SSV_BEACON_ADDR" == *"127.0.0.1"* ]]; then
+        echo -e " - CL Source : ${GREEN}Local${NC} (${SSV_BEACON_ADDR})"
+    else
+        SSV_BEACON_HOST=$(echo "$SSV_BEACON_ADDR" | awk -F/ '{print $3}')
+        echo -e " - CL Source : ${YELLOW}External (${SSV_BEACON_HOST})${NC} (Single point of dependency)"
+    fi
+fi
+```
+
+> 💡 **なぜホスト名だけを表示するのか：** `BEACON_NODE_ADDR`にはAPIキーが
+> 含まれている場合があります。`awk -F/ '{print $3}'`でホスト部分のみを
+> 抜き出すことで、健康診断の出力をそのまま画面共有・スクリーンショットで
+> 共有してもAPIキーが漏れない設計にしています。
+
+**② 閾値署名（COMMITTEE duty）の成功状況**
+
+```bash
+# 閾値署名（COMMITTEE duty）の成功状況
+# 【Why】「動いている」ことと「署名タスクを完遂できているか」は別。
+# 直近のCOMMITTEE duty処理ログから成功・失敗を集計し、
+# 4人クラスターの一員として実際に責務を果たせているか確認する。
+SSV_DUTY_LOG=$(docker logs ssv-node --since 1h 2>&1 | grep -i "finished duty processing")
+if [ -n "$SSV_DUTY_LOG" ]; then
+    SSV_DUTY_TOTAL=$(echo "$SSV_DUTY_LOG" | wc -l)
+    SSV_DUTY_SUCCESS=$(echo "$SSV_DUTY_LOG" | grep -c "100% success")
+    if [ "$SSV_DUTY_SUCCESS" -eq "$SSV_DUTY_TOTAL" ]; then
+        echo -e " - Duty (1h) : ${GREEN}${SSV_DUTY_SUCCESS}/${SSV_DUTY_TOTAL} success${NC}"
+    else
+        echo -e " - Duty (1h) : ${RED}${SSV_DUTY_SUCCESS}/${SSV_DUTY_TOTAL} success (check logs!)${NC}"
+    fi
+else
+    echo -e " - Duty (1h) : ${YELLOW}No duty activity in last 1h${NC}"
+fi
+```
+
+> 💡 **「100% success」の数え方：** SSVノードのログには、duty処理完了時に
+> `finished duty processing (100% success)`という形式で結果が出力されます。
+> 直近1時間分のログ件数と、その中の成功件数を比較することで、
+> 一目で「すべて成功しているか」「一部失敗していないか」が分かります。
+
+> ⚠️ **このチェックは、他の項目より実行に時間がかかる場合があります。**
+> `docker logs --since 1h`は、コンテナの累積ログ量に応じて読み出しコストが
+> 変わるため、SSVノードを長期間稼働させているほど、この行の表示に
+> 数秒〜十数秒かかることがあります。`--since`の時間窓を短く（例：15分）
+> しても改善は見られなかったため、情報量を優先して1時間のまま採用して
+> います。スクリプトが固まったように見えても、壊れているわけではなく、
+> ログ読み出しの待ち時間です。気になる場合は`--since`の値を環境に応じて
+> 調整してください。
+
+### 15-2. node_safe_stop.sh：停止順序の見直し
+
+クラスターに参加する前のSSVノードは「起動・同期確認まで」が目的でしたが、
+今は実際に4人クラスターの署名責務の1/4（3-of-4閾値）を担っています。
+これは、Lido CSMのValidator Clientと同じ「署名役」として扱う必要がある
+ことに気づきました。
+
+**変更前の停止順序：**
+```
+1. lighthouse-vc（Lido CSM署名役）
+2. lighthouse + mev-boost
+3. geth
+```
+
+**変更後の停止順序：**
+```
+1. SSVノード（DVT署名役）← 新規追加・最優先
+2. lighthouse-vc（Lido CSM署名役）
+3. lighthouse + mev-boost
+4. geth
+```
+
+> ⚠️ **SSVノードを一番最初に止める理由は2つあります。**
+> 1つ目は、Lido CSMの署名役と同じ理由（署名タスクをいち早く安全に
+> 終了させる）。2つ目は、**SSVノードがローカルGethのWebSocketに
+> 依存している**ため、Gethより後に止めるとEL接続エラーが出続けてしまう
+> からです。「署名役を優先して止める」「ELは皆が依存するので最後に
+> 止める」という第2部の思想に、SSVノードもそのまま当てはめた結果です。
+
+```bash
+# 1. SSVノード（DVT署名役）を真っ先に停止
+echo -e "\n1. Stopping SSV Node (DVT operator)..."
+if command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' | grep -q "^ssv-node$"; then
+    cd /opt/ssv && docker compose stop
+else
+    echo -e " - SSV Node not running or not installed. Skipping."
+fi
+sleep 2
+
+# 2. 署名役 (Validator Client) を停止
+echo -e "\n2. Stopping Validator Client (lighthouse-vc)..."
+sudo systemctl stop lighthouse-vc
+sleep 2
+
+# （以降、3. Beacon Node・MEV-Boost、4. Geth の順は第2部から変更なし）
+```
+
+停止後の検証にも、SSVコンテナの状態確認を追加しています。
+
+```bash
+# SSVコンテナの停止確認（systemdサービスではないため別途確認）
+if command -v docker >/dev/null 2>&1 && docker ps -a --format '{{.Names}}' | grep -q "^ssv-node$"; then
+    SSV_STATUS=$(docker inspect -f '{{.State.Status}}' ssv-node 2>/dev/null)
+    if [ "$SSV_STATUS" = "exited" ]; then
+        echo -e " - ssv-node: ${GREEN}${SSV_STATUS} (Safe)${NC}"
+    else
+        echo -e " - ssv-node: ${RED}${SSV_STATUS} (Warning: Still active!)${NC}"
+        EXIT_CODE=1
+    fi
+fi
+```
+
+> 💡 **SSVコンテナはsystemdサービスではないため、`systemctl is-active`
+> による確認の対象に入りません。** `docker inspect`で別途状態を確認する
+> 必要がある点が、既存サービス群との違いです。
+
+### 15-3. 【実機検証】停止 → OS更新 → 再起動の通し確認
+
+スクリプトの拡張は、画面上のレビューだけでなく、実際にベアメタル本番環境
+で「止める→OSを更新する→再起動する→確認する」という一連の運用フローを
+通しで実施し、検証しました。
+
+```
+実施フロー：
+① node_safe_stop.sh 実行
+② OSアップデート（sudo apt update && sudo apt upgrade -y）
+③ サーバー再起動（sudo systemctl reboot）
+④ node_check.sh で全項目を確認
+```
+
+**①の結果（抜粋）：**
+
+```
+1. Stopping SSV Node (DVT operator)...
+ ✔ Container ssv-node Stopped
+2. Stopping Validator Client (lighthouse-vc)...
+3. Stopping Beacon Node and MEV-Boost...
+4. Stopping Execution Client (Geth)...
+[Verification] Check Service Status:
+ - lighthouse-vc: inactive (Safe)
+ - lighthouse: inactive (Safe)
+ - mev-boost: inactive (Safe)
+ - geth: inactive (Safe)
+ - ssv-node: exited (Safe)
+All services stopped safely. You can now reboot or power off.
+```
+
+SSVノードを含む全サービスが、想定した順序通りに安全停止できることを確認
+しました。
+
+### 15-4. 【新発見】再起動後、SSVコンテナだけ自動復帰しない問題
+
+③のサーバー再起動後、想定外の挙動に気づきました。
+
+```bash
+sudo systemctl is-active geth lighthouse lighthouse-vc mev-boost
+# → すべて active（systemdの enabled設定通り、自動復帰していた）
+
+node_check
+# → [1] System Services Status はすべて active
+# → [12] SSV Node (DVT) Status の Container が exited のまま
+```
+
+**原因：Dockerの`restart`ポリシーの仕組み**
+
+第3部で設定していた`docker-compose.yaml`の`restart`ポリシーは
+`unless-stopped`でした。このポリシーには、systemdの`enabled`設定とは
+異なる、見落としやすい仕様があります。
+
+```
+restart: unless-stopped の挙動：
+  - OSがいきなり落ちた・クラッシュした場合
+    → 「意図しない停止」と判定され、再起動後は自動的に復帰する
+  - docker compose stop / docker stop で明示的に止めた場合
+    → 「意図した停止」と記録され、次にDocker・OSが再起動しても
+      自動的には復帰しない（手動で起動するまで止まったまま）
+```
+
+つまり、**「安全に・丁寧に手順通り停止させたこと」自体が、次回の自動復帰を
+妨げる原因になっていた**という、直感に反する仕様でした。これまで（丁寧な
+安全停止スクリプトを使う前）にサーバーをそのまま再起動していた場合は、
+むしろ「意図しない停止」扱いとなり自動復帰していた可能性が高く、今回の
+スクリプト改善によって初めて表面化した問題です。
+
+**対応：再起動ポリシーをsystemdと同じ挙動に統一**
+
+「安全に止めることを最優先しつつ、OS再起動時はsystemdサービスと同じ
+ように自動復帰してほしい」という方針のもと、`restart`ポリシーを
+`always`に変更しました。
+
+```yaml
+# /opt/ssv/docker-compose.yaml
+services:
+  ssv-node:
+    restart: always  # unless-stopped から変更
+```
+
+```bash
+cd /opt/ssv && docker compose up -d
+```
+
+> 💡 **`node_safe_stop.sh`での安全停止と`restart: always`は矛盾しません。**
+> `docker compose stop`による「今、動いているものを安全に止める」操作と、
+> `restart`ポリシーが決める「次にOS・Dockerが再起動した時、自動的に
+> 立ち上げるかどうか」は、時間軸が異なる別の設定です。`always`に変更
+> しても、`node_safe_stop.sh`を使った手動の安全停止フローは今までと
+> 同じように機能します。変わるのは「OS再起動後の自動復帰」だけです。
+
+変更後、実際に再度`docker compose up -d`で反映し、`node_check.sh`で
+正常稼働（Container active、Sync Slot更新、Duty success）を確認しました。
+
+> ⚠️ **設定変更直後は、`P2P Peers`の取得が一時的に`Error fetching
+> metrics`になることがあります。** コンテナを再作成した直後はMetrics
+> APIやP2P接続がまだ温まっておらず、1〜2分待って再実行すると正常な
+> 数値に戻ります。一時的なエラー表示で慌てる必要はありません。
+
+### 15-5. なぜEL（Geth）側は個別チェックを追加しなかったのか
+
+CLの接続先（外部Alchemy）は新しく表示項目を追加しましたが、EL（Geth）の
+接続先については、あえて個別のチェック項目を追加していません。これは
+見落としではなく、**既存のチェック項目で実質的にカバーされている**という
+判断によるものです。
+
+```
+CL（Beacon）→ 外部Alchemy → SSVノード独自の依存先
+            → 既存の health check には存在しない依存関係
+            → 個別の確認項目が必要だった
+
+EL（Geth）  → ローカルGeth（ws://127.0.0.1:8546）
+            → [1] System Services Status の geth: active で
+              すでに「サービスとして起動しているか」は確認済み
+            → [12]の Sync Slot が更新され続けていること自体が、
+              SSVノードがEL（registry events等）を正しく受信できて
+              いる証拠にもなっている
+```
+
+> 💡 **「サービスが起動しているか」と「SSVノードがそのサービスに正しく
+> 接続できているか」は、理論上は別の話です。** 例えばGethは起動していても、
+> 何らかの理由で`--ws`オプションが外れていたり、ポート8546だけ別の問題で
+> 塞がっていれば、SSVノード側はEL接続エラーを起こす可能性があります。
+> しかし、その場合は[12]の`Sync Slot`が更新されなくなる（停止する）ため、
+> 結果的に異常が検知できます。CLのように「個別の依存先を明示しないと
+> 気づけない」ものと、ELのように「既存項目の組み合わせで間接的に
+> カバーできる」ものを区別し、後者には項目を増やさない、という判断です。
+>
+> 死活監視の項目を増やすこと自体が目的ではなく、**「何を見れば十分か」を
+> 見極めて、必要最小限の項目に絞る**ことも、運用設計の一部だと考えています。
+
+---
+
 ## 今後の課題
 
 ```
