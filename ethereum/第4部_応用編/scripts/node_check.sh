@@ -238,32 +238,17 @@ if command -v docker >/dev/null 2>&1 && docker ps -a --format '{{.Names}}' | gre
             echo -e " - Validator : ${YELLOW}not attesting${NC}"
         fi
 
-        # 5-4. 閾値署名（COMMITTEE duty）の失敗回数（累積）
-        # 【Why】「動いている」ことと「署名タスクを完遂できているか」は別。
-        # ssv_runner_submissions_failed_total（累積失敗数・counter型）で
-        # 確認する。
-        # 【Note】ssv_runner_submissions（gauge型）は「直近の試行状態」を
-        # 示す値であり、counter型のfailed_totalと単純に並べて
-        # 「attempts/failed」として比較すると型の違いにより誤解を招くため、
-        # 累積失敗数のみを表示する。
-        SSV_SUBMIT_FAILED=$(echo "$SSV_METRICS" | grep '^ssv_runner_submissions_failed_total{.*beacon_role="ATTESTER"' | awk '{print $2}')
-        if [ -n "$SSV_SUBMIT_FAILED" ]; then
-            if [ "$SSV_SUBMIT_FAILED" == "0" ]; then
-                echo -e " - Duty Failed: ${GREEN}${SSV_SUBMIT_FAILED} (cumulative)${NC}"
-            else
-                echo -e " - Duty Failed: ${RED}${SSV_SUBMIT_FAILED} (cumulative, check logs!)${NC}"
-            fi
-        else
-            echo -e " - Duty Failed: ${YELLOW}No submission metrics yet${NC}"
-        fi
-
-        # 5-5. ラウンドチェンジ（コンセンサスのタイムアウト・不安定さの兆候）
-        # 【Why】署名自体は成功していても、QBFTコンセンサスが一発で
-        # 決まらずタイムアウトでラウンドが変わった回数。
-        # 値が大きい・増え続ける場合はクラスター内の誰かの応答が
-        # 遅い可能性がある。
-        SSV_ROUND_CHANGES=$(echo "$SSV_METRICS" | grep '^ssv_validator_duty_rounds_changed_total{.*reason="timeout"' | awk '{sum+=$2} END{print sum+0}')
-        echo -e " - Round Chg : ${CYAN}${SSV_ROUND_CHANGES:-0} timeout(s)${NC}"
+        # 【Note】Duty失敗回数・Round Change回数の表示は、ここから削除した。
+        # これらは ssv_runner_submissions_failed_total ・
+        # ssv_validator_duty_rounds_changed_total という累積カウンター
+        # （counter型）であり、単発のcurlでは「コンテナ起動からの
+        # 累積値」しか取得できず、「いつ起きたか」が分からない。
+        # 正しく期間を絞って見るには increase(...[1h]) のような
+        # PromQL関数が必要だが、これはPrometheusサーバーが過去の値を
+        # 記録していないと計算できず、シェルスクリプト単体では実現
+        # できない。そのためGrafanaダッシュボード（SSV Duty Failures /
+        # SSV Round Changesパネル）に役割を移管した。
+        # 詳細は第8章参照。
     else
         echo -e " - Container : ${RED}${SSV_STATUS}${NC}"
     fi
