@@ -190,19 +190,37 @@ if command -v docker >/dev/null 2>&1 && docker ps -a --format '{{.Names}}' | gre
             echo -e " - Sync Slot : ${YELLOW}Waiting for chain events...${NC}"
         fi
 
-        # 4. CL接続先の表示（片肺運転の可視化）
+        # 4. CL接続先の表示（片肺運転の可視化・複数エンドポイント対応）
         # 【Why】SSVノードのCL（Beacon）接続は外部RPC（Alchemy等）に依存する
         # ハイブリッド構成のため、無料枠の枯渇や接続障害に気づけるよう
         # 「今どこに繋がっているか」を毎回明示する。
+        # 【Note】単一障害点の解消により、BEACON_NODE_ADDRはセミコロン
+        # 区切りの複数エンドポイント構成（Primary + Secondary）に
+        # 変更した。表示も複数件に対応させている。
         SSV_BEACON_ADDR=$(docker inspect ssv-node --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep '^BEACON_NODE_ADDR=' | cut -d'=' -f2-)
         if [ -n "$SSV_BEACON_ADDR" ]; then
-            if [[ "$SSV_BEACON_ADDR" == *"127.0.0.1"* ]]; then
-                echo -e " - CL Source : ${GREEN}Local${NC} (${SSV_BEACON_ADDR})"
-            else
-                # ホスト名だけを抜き出して表示（APIキー等の漏洩を防ぐ）
-                SSV_BEACON_HOST=$(echo "$SSV_BEACON_ADDR" | awk -F/ '{print $3}')
-                echo -e " - CL Source : ${YELLOW}External (${SSV_BEACON_HOST})${NC} (Single point of dependency)"
-            fi
+            SSV_ENDPOINT_COUNT=$(echo "$SSV_BEACON_ADDR" | awk -F';' '{print NF}')
+            SSV_ENDPOINT_INDEX=0
+            IFS=';' read -ra SSV_ENDPOINTS <<< "$SSV_BEACON_ADDR"
+            for SSV_EP in "${SSV_ENDPOINTS[@]}"; do
+                SSV_ENDPOINT_INDEX=$((SSV_ENDPOINT_INDEX + 1))
+                if [ "$SSV_ENDPOINT_INDEX" -eq 1 ]; then
+                    SSV_EP_LABEL="Primary"
+                else
+                    SSV_EP_LABEL="Secondary"
+                fi
+                if [[ "$SSV_EP" == *"127.0.0.1"* ]]; then
+                    echo -e " - CL Source : ${GREEN}${SSV_EP_LABEL}: Local${NC} (${SSV_EP})"
+                else
+                    # ホスト名だけを抜き出して表示（APIキー等の漏洩を防ぐ）
+                    SSV_EP_HOST=$(echo "$SSV_EP" | awk -F/ '{print $3}')
+                    if [ "$SSV_ENDPOINT_COUNT" -ge 2 ]; then
+                        echo -e " - CL Source : ${GREEN}${SSV_EP_LABEL}: External (${SSV_EP_HOST})${NC}"
+                    else
+                        echo -e " - CL Source : ${YELLOW}${SSV_EP_LABEL}: External (${SSV_EP_HOST})${NC} (Single point of dependency)"
+                    fi
+                fi
+            done
         else
             echo -e " - CL Source : ${RED}Error fetching config${NC}"
         fi
@@ -214,12 +232,19 @@ if command -v docker >/dev/null 2>&1 && docker ps -a --format '{{.Names}}' | gre
         # コスト（コンテナの累積ログ量に依存し時間がかかる）を避けられる。
         SSV_METRICS=$(curl -m 3 -s http://127.0.0.1:15000/metrics)
 
-        # 5-1. CL（Beacon）の健全性：接続先がsyncedか
-        SSV_CL_SYNCED=$(echo "$SSV_METRICS" | grep '^ssv_cl_sync_status{.*ssv_cl_sync_status="synced"' | awk '{print $2}')
-        if [ "$SSV_CL_SYNCED" == "1" ]; then
-            echo -e " - CL Status : ${GREEN}synced${NC}"
+        # 5-1. CL（Beacon）の健全性：すべての接続先がsyncedか（複数対応）
+        # 【Why】単一障害点解消のため複数CLエンドポイントを設定した結果、
+        # ssv_cl_sync_status は server_address ラベルごとに別の系列として
+        # 複数行返ってくる。grepで1行だけ抜き出す旧方式では正しく
+        # 判定できないため、synced=1の件数 / 全エンドポイント数で集計する。
+        SSV_CL_SYNCED_COUNT=$(echo "$SSV_METRICS" | grep '^ssv_cl_sync_status{.*ssv_cl_sync_status="synced"' | awk '{sum+=$2} END{print sum+0}')
+        SSV_CL_TOTAL_COUNT=$(echo "$SSV_METRICS" | grep '^ssv_cl_sync_status{.*ssv_cl_sync_status="synced"' | wc -l)
+        if [ "$SSV_CL_TOTAL_COUNT" -gt 0 ] && [ "$SSV_CL_SYNCED_COUNT" -eq "$SSV_CL_TOTAL_COUNT" ]; then
+            echo -e " - CL Status : ${GREEN}${SSV_CL_SYNCED_COUNT}/${SSV_CL_TOTAL_COUNT} synced${NC}"
+        elif [ "$SSV_CL_SYNCED_COUNT" -gt 0 ]; then
+            echo -e " - CL Status : ${YELLOW}${SSV_CL_SYNCED_COUNT}/${SSV_CL_TOTAL_COUNT} synced (degraded, check CL Source!)${NC}"
         else
-            echo -e " - CL Status : ${RED}not synced (check CL Source!)${NC}"
+            echo -e " - CL Status : ${RED}${SSV_CL_SYNCED_COUNT}/${SSV_CL_TOTAL_COUNT} synced (check CL Source!)${NC}"
         fi
 
         # 5-2. EL（ローカルGeth）の健全性：SSVノードから見て ready か
