@@ -491,6 +491,43 @@ sudo apt-get install -y geth
 geth version
 ```
 
+> ⚠️ **`sudo apt-get update` で `404 Not Found` が出た場合**
+>
+> PPA（`ppa:ethereum/ethereum`）は有志が保守しているリポジトリのため、
+> 新しくリリースされたばかりのUbuntuバージョンへの対応が
+> 追いついていないことがあります。
+>
+> **まず自分のUbuntuバージョンを確認してください：**
+>
+> ```bash
+> lsb_release -a
+> ```
+>
+> 本書で案内している `22.04 LTS` や `24.04 LTS` より新しいバージョン
+> （リリースから日が浅いLTSや、通常版のUbuntu）を使っている場合、
+> PPA側にまだそのバージョン向けのビルドが存在せず404になることがあります。
+>
+> **その場合は、PPAを使わず公式バイナリを直接インストールしてください。**
+> こちらはUbuntuのバージョンに依存しないため、確実に動作します。
+>
+> ```bash
+> # ① Geth公式ダウンロードページで最新の安定版tar.gzのURLを確認する
+> # 📎 https://geth.ethereum.org/downloads
+>
+> # ② ダウンロードする（URLは公式サイトで確認した最新版に置き換える）
+> cd ~
+> wget <公式サイトで確認したtar.gzのURL>
+>
+> # ③ 展開する
+> tar -xvf geth-linux-amd64-*.tar.gz
+>
+> # ④ 実行ファイルをパスの通った場所へ配置する
+> sudo install -m 0755 -o root -g root -t /usr/local/bin geth-linux-amd64-*/geth
+>
+> # ⑤ バージョン確認（表示されればOK。以降の手順はPPA版と同じように進められます）
+> geth version
+> ```
+
 ### Systemdサービスの作成
 
 ```bash
