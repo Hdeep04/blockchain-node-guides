@@ -808,6 +808,11 @@ sudo apt-get update && sudo apt-get install -y geth
 geth version
 ```
 
+> ⚠️ **`sudo apt-get update` で `404 Not Found` が出た場合：**
+> 第1部・検証編の「Geth（実行クライアント）の構築」セクションを
+> 参照してください。Ubuntuのバージョンによって発生する既知の問題と、
+> 公式バイナリを使った代替インストール手順を解説しています。
+
 ```bash
 sudo vi /etc/systemd/system/geth.service
 ```
