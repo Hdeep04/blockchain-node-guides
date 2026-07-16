@@ -569,10 +569,12 @@ if command -v docker >/dev/null 2>&1 && \
         SSV_PEERS=$(curl -m 3 -s http://127.0.0.1:15000/metrics \
           | grep '^ssv_p2p_peers_connected' | awk '{print $2}')
         echo -e " - P2P Peers : ${CYAN}${SSV_PEERS:-Error}${NC}"
-        # 最新の同期スロット（生ログから抽出）
-        SSV_SLOT=$(docker logs ssv-node --tail 100 2>&1 \
-          | grep "DutyScheduler" | grep "received head event" | tail -n 1 \
-          | awk -F'"slot": ' '{print $2}' | awk -F',' '{print $1}')
+        # 最新の同期スロット（successfully submitted attestations から抽出）
+        # 【Why】SSVノードの生ログから最新スロットを抽出し、実際に
+        # Duty（署名）処理が進んでいることを確認します。
+        SSV_SLOT=$(docker logs ssv-node --tail 200 2>&1 \
+          | grep "successfully submitted attestations" | tail -n 1 \
+          | grep -oP '"slot":\s*\K[0-9]+')
         echo -e " - Sync Slot : ${GREEN}${SSV_SLOT:-Waiting...}${NC} (Following Chain Head)"
     else
         echo -e " - Container : ${RED}${SSV_STATUS}${NC}"
