@@ -229,9 +229,55 @@ You are now following Node Operator #<your_operator_id>
 
 これにより、Activation等の重要イベントを、能動的に確認しなくても通知で把握できる体制が整った。CSM Sentinelは開発者コミュニティによる非公式ツールであり、可用性の保証がない点は留意しつつ、Lido公式のOperator Portalでも紹介されている実質的な定番ツールとして採用した。
 
+## 7. Activation待ちの実測——beaconcha.inで判明した正確な見通し
+
+Deposit完了後、Lighthouse VCのログでは「All validators inactive」の状態が続き、Beacon Node APIへの直接照会でも`404 unknown validator`が返り続けた。これは異常ではなく、Depositトランザクションの確定から、Beacon Chain側がその情報を取り込むまでの、正常な処理待ちの期間である。
+
+beaconcha.inでバリデータの公開鍵を検索したところ、デポジットキュー内での正確な位置と、推定所要時間が確認できた。
+
+```
+Status: Pending / Deposit queue
+Deposit queue順位: #34633
+推定クレジット日時: 2026年9月28日 7:46（epoch 478451）
+推定アクティベーション: 2026年9月28日 8:31（epoch 478458）
+残り時間: 約38日10時間
+```
+
+### ネットワーク全体の規模感
+
+```
+Active Validators: 901,931
+Staked Ether: 42,316,681 ETH
+Joining / Leaving: 2,212K / 704 ETH
+```
+
+90万人を超えるバリデータが稼働する中での順番待ちであり、ICS（Identified Community Staker）による優先キューの適用を受けてなお、約1か月超の期間を要する計算になった。
+
+### ICS優遇の適用確認
+
+CSM UIの「Operator Type」画面で、ICSステータスが「Claimed（取得済み）」として表示されていることを確認した。ICSは、最初の10鍵に対するデポジット優先権を含む複数の優遇措置を持つが、それでも今回のような待機時間が生じる。優先キューは「順番を有利にする」仕組みであり、「即座にActivateされる」ことを保証するものではない、という実態が確認できた。
+
+> 💡 **教訓：ICS等の優先枠があっても、ネットワーク全体の規模に対しては、依然として相応の待機時間が発生する。** 「優先されるから早い」という期待値を持ちすぎず、実際のキュー番号と推定時刻をbeaconcha.in等で確認し、正確な見通しを立てることが重要である。
+
+## 8. CSM UIの新機能（メインネットで確認できたもの）
+
+テストネット時代のCSM UIにはなかった、あるいは気づかなかった機能がいくつか確認できた。
+
+### Surveys（任意アンケート）
+
+連絡先情報、CSMを知った経緯、バリデータ運用経験等を任意で提出できるフォーム。「Voluntary report form」と明記されており、必須ではない。
+
+### Monitoring（外部ツール連携集）
+
+beaconcha.in Entity、Rated explorer、MigaLabs、beaconcha.in v2、Lido Operators Portal、Lido Fees monitoring、CSM Sentinelへの導線が一覧化されている。特に「Lido Fees monitoring」は、欠落スロットや誤ったfee recipient・MEVリレー設定を追跡する機能を持ち、以前検討した「Incorrect validator registration」のようなエラーの発見に活用できる。
+
+### Operator Type（ICS/IDVTC状況の一覧）
+
+ICSのClaimed状況に加え、IDVTC（Identified DVT Cluster）への申請ボタンも同じ画面に表示されている。第5部第1章で今後の課題としていた「IDVTC取得のための3名の仲間探し」は、このメニューから申請フローに進める。
+
 ---
 
-## 7. まとめ
+## 9. まとめ
 
 ```
 ① ethstaker_deposit-cliは、セキュリティ監査を反映した最新版
@@ -250,16 +296,25 @@ You are now following Node Operator #<your_operator_id>
    メインネット環境でもそのまま有効だった
 ⑧ CSM Sentinelは、テストネットとメインネットで別のBotとして
    提供されており、あらためての登録が必要
+⑨ ICSの優先キューを適用してなお、Activationまで約38日
+   （Deposit queue内で約34,600番台）を要した。優先枠は
+   順番を有利にするものであり、即時性を保証するものではない
+⑩ CSM UIには、テストネット時代になかった複数の機能
+   （Surveys、Monitoring連携集、Operator Type一覧）が
+   確認できた
 ```
 
 ---
 
-## 8. 今後の課題・次のステップ
+## 10. 今後の課題・次のステップ
+
+Activationまでの約1か月超の期間は、単なる待機期間ではなく、これまで後回しにしてきた運用基盤の整備に充てる。
 
 ```
-[ ] バリデータのActivation待ち（デポジットキュー通過）
-[ ] Activation後、ブロック提案予定を考慮した安全な運用サイクルの確立
+[ ] Grafana/Prometheusによる監視体制の再構築
 [ ] node_safe_stop.shのメインネット向け書き換え
     （バリデータインデックスの動的取得への変更）
-[ ] Grafana/Prometheusによる監視体制の再構築
+[ ] node_check.shの[7]セクション改善
+    （Pending activation中の分岐表示）
+[ ] IDVTC申請に向けた、ICS認証済みクラスター仲間探し
 ```
