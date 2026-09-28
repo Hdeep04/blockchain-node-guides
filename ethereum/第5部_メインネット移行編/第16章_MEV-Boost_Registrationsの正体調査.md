@@ -164,13 +164,13 @@ Deposit creditedとActivationの間には、約45分（7エポック分）の間
       が、どちらのタイミングで変化するか
     - MEV-Boost Registrationsのメトリクスが、実際にいつから
       動き始めるか
-      → 第19章で検証済み。ビーコンノードの状態は、unknown →
+      → （9/28追記）第19章で検証済み。ビーコンノードの状態は、unknown →
         pending_initialized（Deposit credited、7:40頃）→ pending_queued
         （7:49頃）→ active_ongoing（Activation、8:25頃）と変化した。
         MEV-Boost登録は、7:44に開始
 [x] 上記の実測結果をもって、本章7節の仮説を検証・確定する
-    → 第19章で確定
+    → （9/28追記）第19章で確定
 [x] Doppelganger Protectionの様子見期間の実測（第15章からの継続課題）も、
     同じくActivation当日にあわせて記録する
-    → 第19章で検証済み。Doppelgangerの検知は、Activationの約38分前に完了
+    → （9/28追記）第19章で検証済み。Doppelgangerの検知は、Activationの約38分前に完了
 ```
