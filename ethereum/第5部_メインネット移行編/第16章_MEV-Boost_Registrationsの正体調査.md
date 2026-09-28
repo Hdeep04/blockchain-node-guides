@@ -132,6 +132,8 @@ Deposit creditedとActivationの間には、約45分（7エポック分）の間
 
 > 💡 **未検証の仮説**：ビーコンチェーン上でインデックスが割り当てられるのは、Activation本体（8:25頃）ではなく、その45分前のDeposit credited（7:40頃）のタイミングである可能性がある。もしそうであれば、MEV-Boost Registrationsのメトリクスも、正式なActivationを待たずに7:40頃から動き始めるかもしれない。ただしこれは今回の調査結果とタイムラインを組み合わせた推測に過ぎず、Lighthouseの内部実装として確定した情報ではない。9/28当日の実測で検証する。
 
+> ✅ **検証済み（2026年9月28日、第19章）。** MEV-Boostの登録は、バリデータがビーコンチェーンに認識された12秒後（Deposit credited〈7:40頃〉の約4分後）、Activationの約41分前に始まっていた。Activation本体を待たずに動く、という仮説は、ログで確認できた。
+
 ---
 
 ## 8. まとめ
@@ -156,13 +158,19 @@ Deposit creditedとActivationの間には、約45分（7エポック分）の間
 ## 今後の課題
 
 ```
-[ ] 9/28のDeposit credited（7:40頃）およびActivation（8:25頃）の
+[x] 9/28のDeposit credited（7:40頃）およびActivation（8:25頃）の
     タイミングで、以下を実測・記録する
     - ビーコンチェーンのバリデータ状態（unknown → pending_queued等）
       が、どちらのタイミングで変化するか
     - MEV-Boost Registrationsのメトリクスが、実際にいつから
       動き始めるか
-[ ] 上記の実測結果をもって、本章7節の仮説を検証・確定する
-[ ] Doppelganger Protectionの様子見期間の実測（第15章からの継続課題）も、
+      → 第19章で検証済み。ビーコンノードの状態は、unknown →
+        pending_initialized（Deposit credited、7:40頃）→ pending_queued
+        （7:49頃）→ active_ongoing（Activation、8:25頃）と変化した。
+        MEV-Boost登録は、7:44に開始
+[x] 上記の実測結果をもって、本章7節の仮説を検証・確定する
+    → 第19章で確定
+[x] Doppelganger Protectionの様子見期間の実測（第15章からの継続課題）も、
     同じくActivation当日にあわせて記録する
+    → 第19章で検証済み。Doppelgangerの検知は、Activationの約38分前に完了
 ```
